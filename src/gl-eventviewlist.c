@@ -30,6 +30,7 @@
 #include "gl-eventviewrow.h"
 #include "gl-journal-model.h"
 #include "gl-util.h"
+#include "gl-search-popover.h"
 
 struct _GlEventViewList
 {
@@ -50,8 +51,12 @@ typedef struct
     GtkWidget *event_search;
     GtkWidget *event_scrolled;
     GtkWidget *search_entry;
+    GtkWidget *search_dropdown_button;
+    GtkWidget *search_popover;
     gchar *search_text;
     const gchar *boot_match;
+    gint parameter_group;
+    GlQuerySearchType search_type;
 } GlEventViewListPrivate;
 
 /* We define these two enum values as 2 and 3 to avoid the conflict with TRUE
@@ -379,28 +384,73 @@ get_current_boot_id (const gchar *boot_match)
     return g_strdup (boot_value);
 }
 
+static void
+gl_query_add_search_matches (GlQuery *query,
+                             gint parameter_group,
+                             const gchar *search_text,
+                             GlQuerySearchType search_type)
+{
+    switch (parameter_group)
+    {
+        case 0:
+        {
+            gl_query_add_match (query, "_PID", search_text, search_type);
+            gl_query_add_match (query, "MESSAGE", search_text, search_type);
+            gl_query_add_match (query, "_COMM", search_text, search_type);
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, search_type);
+        }
+        break;
+
+        case 1:
+        {
+            gl_query_add_match (query, "_PID", search_text, search_type);
+        }
+        break;
+
+        case 2:
+        {
+            gl_query_add_match (query, "MESSAGE", search_text, search_type);
+        }
+        break;
+
+        case 3:
+        {
+            gl_query_add_match (query, "_COMM", search_text, search_type);
+        }
+        break;
+
+        case 4:
+        {
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, search_type);
+        }
+        break;
+    }
+}
+
 /* Create Query Object according to GUI elements and set it on Journal Model */
 static GlQuery *
-create_query_object (GlJournalModel *model,
-                     GlCategoryList *list,
-                     const gchar *current_boot_match,
-                     const gchar *search_text)
+create_query_object (GlEventViewList *view)
 {
+    GlEventViewListPrivate *priv;
+    GlCategoryList *categories;
     GlQuery *query;
     gchar *boot_id;
     GlCategoryListFilter filter;
+
+    priv = gl_event_view_list_get_instance_private (view);
+    categories = GL_CATEGORY_LIST (priv->categories);
 
     /* Create new query object */
     query = gl_query_new ();
 
     /* Get current boot id */
-    boot_id = get_current_boot_id (current_boot_match);
+    boot_id = get_current_boot_id (priv->boot_match);
 
     /* Add boot match for all the categories */
     gl_query_add_match (query, "_BOOT_ID", boot_id, SEARCH_TYPE_EXACT);
 
     /* Add Exact Matches according to selected category */
-    filter = gl_category_list_get_category (list);
+    filter = gl_category_list_get_category (categories);
 
     switch (filter)
     {
@@ -460,15 +510,59 @@ create_query_object (GlJournalModel *model,
             g_assert_not_reached ();
     }
 
-    /* Add Substring Matches */
-    gl_query_add_match (query, "_MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+    /* Add Search Matches */
+    gl_query_add_search_matches (query, priv->parameter_group, priv->search_text, priv->search_type);
 
     g_free (boot_id);
 
     return query;
+}
+
+/* Event handler for search popover "parameter-changed" signal */
+static void
+search_popover_parameter_changed (GlSearchPopover *popover,
+                                  gint parameter_group,
+                                  GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+    GlQuery *query;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    priv->parameter_group = parameter_group;
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
+}
+
+/* Event handler for search popover "search-type-changed" signal */
+static void
+search_popover_search_type_changed (GlSearchPopover *popover,
+                                    gint search_type,
+                                    GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+    GlQuery *query;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    if (search_type == 0)
+    {
+        priv->search_type = SEARCH_TYPE_EXACT;
+    }
+    else
+    {
+        priv->search_type = SEARCH_TYPE_SUBSTRING;
+    }
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
 }
 
 static void
@@ -486,7 +580,7 @@ on_notify_category (GlCategoryList *list,
     priv = gl_event_view_list_get_instance_private (view);
 
     /* Create the query object */
-    query = create_query_object (priv->journal_model, list, priv->boot_match, priv->search_text);
+    query = create_query_object (view);
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
@@ -601,20 +695,20 @@ static void
 on_search_entry_changed (GtkSearchEntry *entry,
                          gpointer user_data)
 {
+    GlEventViewList *view;
     GlEventViewListPrivate *priv;
-    GlCategoryList *categories;
     GlQuery *query;
 
-    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
+    view = GL_EVENT_VIEW_LIST (user_data);
 
-    categories = GL_CATEGORY_LIST (priv->categories);
+    priv = gl_event_view_list_get_instance_private (view);
 
     g_free (priv->search_text);
 
     priv->search_text = g_strdup (gtk_entry_get_text (GTK_ENTRY (priv->search_entry)));
 
     /* Create the query object */
-    query = create_query_object (priv->journal_model, categories, priv->boot_match, priv->search_text);
+    query = create_query_object (view);
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
@@ -693,6 +787,9 @@ gl_event_view_list_class_init (GlEventViewListClass *klass)
                                                   event_scrolled);
     gtk_widget_class_bind_template_child_private (widget_class, GlEventViewList,
                                                   search_entry);
+    gtk_widget_class_bind_template_child_private (widget_class, GlEventViewList,
+                                                  search_dropdown_button);
+
 
     gtk_widget_class_bind_template_callback (widget_class,
                                              on_search_entry_changed);
@@ -713,6 +810,8 @@ gl_event_view_list_init (GlEventViewList *view)
 
     priv->search_text = NULL;
     priv->boot_match = NULL;
+    priv->parameter_group = 0;
+    priv->search_type = SEARCH_TYPE_SUBSTRING;
     priv->category_sizegroup = gtk_size_group_new (GTK_SIZE_GROUP_HORIZONTAL);
     priv->message_sizegroup = gtk_size_group_new (GTK_SIZE_GROUP_HORIZONTAL);
     priv->time_sizegroup = gtk_size_group_new (GTK_SIZE_GROUP_HORIZONTAL);
@@ -721,6 +820,18 @@ gl_event_view_list_init (GlEventViewList *view)
 
     priv->journal_model = gl_journal_model_new ();
     g_application_bind_busy_property (g_application_get_default (), priv->journal_model, "loading");
+
+    /* setup search popover */
+    priv->search_popover = gl_search_popover_new();
+
+    gtk_menu_button_set_popover (GTK_MENU_BUTTON (priv->search_dropdown_button),
+                                    priv->search_popover);
+
+    g_signal_connect (priv->search_popover, "parameter-changed",
+                      G_CALLBACK (search_popover_parameter_changed), view);
+
+    g_signal_connect (priv->search_popover, "search-type-changed",
+                      G_CALLBACK (search_popover_search_type_changed), view);
 
     g_signal_connect (priv->event_scrolled, "edge-reached",
                       G_CALLBACK (gl_event_list_view_edge_reached), view);
