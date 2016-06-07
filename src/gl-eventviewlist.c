@@ -50,8 +50,16 @@ typedef struct
     GtkWidget *event_search;
     GtkWidget *event_scrolled;
     GtkWidget *search_entry;
+    GtkWidget *search_dropdown_button;
+
+    /* Search popover elements */
+    GtkWidget *parameter_stack;
+    GtkWidget *parameter_button_label;
+    GtkWidget *parameter_label_stack;
+
     gchar *search_text;
     const gchar *boot_match;
+    gsize parameter_group;
 } GlEventViewListPrivate;
 
 /* We define these two enum values as 2 and 3 to avoid the conflict with TRUE
@@ -62,12 +70,39 @@ typedef enum
     LOGICAL_AND = 3
 } GlEventViewListLogic;
 
+typedef enum
+{
+    ALL_AVAILABLE_FIELDS,
+    PID,
+    UID,
+    GID,
+    MESSAGE,
+    PROCESS_NAME,
+    SYSTEMD_UNIT,
+    KERNEL_DEVICE,
+    AUDIT_SESSION,
+    EXECUTABLE_PATH
+} GlParameterGroups;
+
 G_DEFINE_TYPE_WITH_PRIVATE (GlEventViewList, gl_event_view_list, GTK_TYPE_BOX)
 
 static const gchar DESKTOP_SCHEMA[] = "org.gnome.desktop.interface";
 static const gchar SETTINGS_SCHEMA[] = "org.gnome.Logs";
 static const gchar CLOCK_FORMAT[] = "clock-format";
 static const gchar SORT_ORDER[] = "sort-order";
+
+static const gchar *const PARAMETER_GROUPS[] = {
+                                                 N_("All Available Fields"),
+                                                 N_("PID"),
+                                                 N_("UID"),
+                                                 N_("GID"),
+                                                 N_("Message"),
+                                                 N_("Process Name"),
+                                                 N_("Systemd Unit"),
+                                                 N_("Kernel Device"),
+                                                 N_("Audit Session"),
+                                                 N_("Executable Path")
+                                               };
 
 gchar *
 gl_event_view_list_get_output_logs (GlEventViewList *view)
@@ -379,22 +414,101 @@ get_current_boot_id (const gchar *boot_match)
     return g_strdup (boot_value);
 }
 
+static void
+query_add_search_matches (GlQuery *query,
+                          gint parameter_group,
+                          const gchar *search_text)
+{
+    switch (parameter_group)
+    {
+        case ALL_AVAILABLE_FIELDS:
+        {
+            gl_query_add_match (query, "_PID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_UID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_GID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_EXE", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case PID:
+        {
+            gl_query_add_match (query, "_PID", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case UID:
+        {
+            gl_query_add_match (query, "_UID", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case GID:
+        {
+            gl_query_add_match (query, "_GID", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case MESSAGE:
+        {
+            gl_query_add_match (query, "MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case PROCESS_NAME:
+        {
+            gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case SYSTEMD_UNIT:
+        {
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case KERNEL_DEVICE:
+        {
+            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case AUDIT_SESSION:
+        {
+            gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+
+        case EXECUTABLE_PATH:
+        {
+            gl_query_add_match (query, "_EXE", search_text, SEARCH_TYPE_SUBSTRING);
+        }
+        break;
+    }
+}
+
 /* Create Query Object according to GUI elements and set it on Journal Model */
 static GlQuery *
-create_query_object (GlJournalModel *model,
-                     GlCategoryList *list,
-                     const gchar *current_boot_match,
-                     const gchar *search_text)
+create_query_object (GlEventViewList *view)
 {
+    GlEventViewListPrivate *priv;
     GlQuery *query;
     gchar *boot_id;
+    GlCategoryList *list;
     GlCategoryListFilter filter;
+
+    priv = gl_event_view_list_get_instance_private (view);
+    list = GL_CATEGORY_LIST (priv->categories);
 
     /* Create new query object */
     query = gl_query_new ();
 
     /* Get current boot id */
-    boot_id = get_current_boot_id (current_boot_match);
+    boot_id = get_current_boot_id (priv->boot_match);
 
     /* Add boot match for all the categories */
     gl_query_add_match (query, "_BOOT_ID", boot_id, SEARCH_TYPE_EXACT);
@@ -461,10 +575,7 @@ create_query_object (GlJournalModel *model,
     }
 
     /* Add Substring Matches */
-    gl_query_add_match (query, "_MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
-    gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+    query_add_search_matches (query, priv->parameter_group, priv->search_text);
 
     g_free (boot_id);
 
@@ -486,7 +597,7 @@ on_notify_category (GlCategoryList *list,
     priv = gl_event_view_list_get_instance_private (view);
 
     /* Create the query object */
-    query = create_query_object (priv->journal_model, list, priv->boot_match, priv->search_text);
+    query = create_query_object (view);
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
@@ -601,20 +712,20 @@ static void
 on_search_entry_changed (GtkSearchEntry *entry,
                          gpointer user_data)
 {
+    GlEventViewList *view;
     GlEventViewListPrivate *priv;
-    GlCategoryList *categories;
     GlQuery *query;
 
-    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
+    view = GL_EVENT_VIEW_LIST (user_data);
 
-    categories = GL_CATEGORY_LIST (priv->categories);
+    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
 
     g_free (priv->search_text);
 
     priv->search_text = g_strdup (gtk_entry_get_text (GTK_ENTRY (priv->search_entry)));
 
     /* Create the query object */
-    query = create_query_object (priv->journal_model, categories, priv->boot_match, priv->search_text);
+    query = create_query_object (view);
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
@@ -660,6 +771,184 @@ gl_event_list_view_edge_reached (GtkScrolledWindow *scrolled,
         gl_journal_model_fetch_more_entries (priv->journal_model, FALSE);
 }
 
+/* Event handlers for search popover elements */
+static void
+search_popover_closed (GtkPopover *popover,
+                       gpointer user_data)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "what-label");
+}
+
+static void
+select_parameter_button_clicked (GtkButton *button,
+                                 gpointer user_data)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-list");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "select-parameter-label");
+}
+
+static void
+parameter_listbox_row_activated (GtkListBox *box,
+                                 GtkListBoxRow *row,
+                                 gpointer user_data)
+{
+    GlQuery *query;
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+    gint parameter_group;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    parameter_group = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (row), "parameter-group-index"));
+
+    gtk_label_set_label (GTK_LABEL (priv->parameter_button_label),
+                         PARAMETER_GROUPS[parameter_group]);
+
+    priv->parameter_group = parameter_group;
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "what-label");
+}
+
+/* Header function to draw seperator in listbox */
+static void
+parameter_listbox_header_func (GtkListBoxRow *row,
+                               GtkListBoxRow *before,
+                               gpointer user_data)
+{
+    gboolean show_separator;
+
+    show_separator = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (row), "show-separator"));
+
+    if (show_separator)
+    {
+        GtkWidget *separator;
+
+        separator = gtk_separator_new (GTK_ORIENTATION_HORIZONTAL);
+        gtk_widget_show (separator);
+
+        gtk_list_box_row_set_header (row, separator);
+    }
+}
+
+/* Function to create a row in the popover listbox */
+static GtkWidget*
+create_row_for_label (const gchar *text,
+                      gboolean show_separator)
+{
+    GtkWidget *row;
+    GtkWidget *label;
+
+    row = gtk_list_box_row_new ();
+
+    g_object_set_data (G_OBJECT (row), "show-separator", GINT_TO_POINTER (show_separator));
+
+    label = g_object_new (GTK_TYPE_LABEL,
+                          "label", text,
+                          "hexpand", TRUE,
+                          "xalign", 0.0,
+                          "margin-start", 6,
+                          NULL);
+
+    gtk_container_add (GTK_CONTAINER (row), label);
+    gtk_widget_show_all (row);
+
+  return row;
+}
+
+/* Fill the entries in the parameter listbox */
+static void
+fill_parameter_listbox (GtkWidget *listbox)
+{
+    GtkWidget *row;
+    gsize i;
+    gsize parameter_groups;
+
+    parameter_groups = G_N_ELEMENTS (PARAMETER_GROUPS);
+
+    /* Parameters */
+    for (i = 0; i < parameter_groups; i++)
+    {
+        row = create_row_for_label (gettext (PARAMETER_GROUPS[i]), i == 1);
+
+        g_object_set_data (G_OBJECT (row), "parameter-group-index", GINT_TO_POINTER (i));
+
+        gtk_container_add (GTK_CONTAINER (listbox), row);
+    }
+}
+
+/* Get the view elements from ui file and link it with the drop down button */
+static void
+setup_search_popover (GlEventViewList *view)
+{
+
+    GlEventViewListPrivate *priv;
+    GtkBuilder *builder;
+    GtkWidget *search_popover_menu;
+    GtkWidget *parameter_listbox;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    builder = gtk_builder_new_from_resource ("/org/gnome/Logs/gl-searchpopover.ui");
+
+    /* Get elements from the view ui file */
+    search_popover_menu = GTK_WIDGET (gtk_builder_get_object (builder, "search_popover_menu"));
+
+    /* elements related to "what" parameter filter label */
+    parameter_listbox = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_listbox"));
+    priv->parameter_stack = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_stack"));
+    priv->parameter_label_stack = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_label_stack"));
+    priv->parameter_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_button_label"));
+
+    /* Link the drop down button with search popover */
+    gtk_menu_button_set_popover (GTK_MENU_BUTTON (priv->search_dropdown_button),
+                                 search_popover_menu);
+
+    /* Connect signals */
+    gtk_builder_add_callback_symbols (builder,
+                                      "select_parameter_button_clicked",
+                                      G_CALLBACK (select_parameter_button_clicked),
+                                      "parameter_listbox_row_activated",
+                                      G_CALLBACK (parameter_listbox_row_activated),
+                                      "search_popover_closed",
+                                      G_CALLBACK (search_popover_closed),
+                                      NULL);
+
+    /* pass "GlEventviewlist *view" as user_data to signals as callback data*/
+    gtk_builder_connect_signals (builder, view);
+
+    /* Set up header function for parameter listbox */
+    gtk_list_box_set_header_func (GTK_LIST_BOX (parameter_listbox),
+                                  (GtkListBoxUpdateHeaderFunc) parameter_listbox_header_func,
+                                  NULL,
+                                  NULL);
+
+    /* Set "All Available Fields" as default option in the select parameter button */
+    priv->parameter_group = ALL_AVAILABLE_FIELDS;
+
+    /* Fill the listbox */
+    fill_parameter_listbox (parameter_listbox);
+
+    g_object_unref (builder);
+}
+
 static void
 gl_event_view_list_finalize (GObject *object)
 {
@@ -693,6 +982,8 @@ gl_event_view_list_class_init (GlEventViewListClass *klass)
                                                   event_scrolled);
     gtk_widget_class_bind_template_child_private (widget_class, GlEventViewList,
                                                   search_entry);
+    gtk_widget_class_bind_template_child_private (widget_class, GlEventViewList,
+                                                  search_dropdown_button);
 
     gtk_widget_class_bind_template_callback (widget_class,
                                              on_search_entry_changed);
@@ -721,6 +1012,8 @@ gl_event_view_list_init (GlEventViewList *view)
 
     priv->journal_model = gl_journal_model_new ();
     g_application_bind_busy_property (g_application_get_default (), priv->journal_model, "loading");
+
+    setup_search_popover (view);
 
     g_signal_connect (priv->event_scrolled, "edge-reached",
                       G_CALLBACK (gl_event_list_view_edge_reached), view);
