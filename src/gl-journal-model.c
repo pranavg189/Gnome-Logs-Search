@@ -823,7 +823,7 @@ search_in_entry (GlJournalEntry *entry,
     if (search_matches->len)
     {
         /* Get search text from a search match */
-        search_match = g_ptr_array_index (search_matches, 0);
+        search_match = g_ptr_array_index (search_matches, search_matches->len - 1);
 
         /* check for null and empty strings */
         if (!search_match->field_value || !*(search_match->field_value))
@@ -834,8 +834,17 @@ search_in_entry (GlJournalEntry *entry,
         {
             search_text_copy = g_strdup (search_match->field_value);
 
-            /* Tokenize the entered text */
-            token_array = tokenize_search_string (search_text_copy);
+            /* if kernel device is set as filtering parameter, then disable tokenizer */
+            if( strstr ("_KERNEL_DEVICE", search_match->field_name))
+            {
+                token_array = g_ptr_array_new();
+                g_ptr_array_add (token_array, search_text_copy);
+            }
+            else
+            {
+                /* Tokenize the entered text */
+                token_array = tokenize_search_string (search_text_copy);
+            }
 
             /* calculate match depending on the number of tokens */
             matches = calculate_match (entry, token_array, search_matches);

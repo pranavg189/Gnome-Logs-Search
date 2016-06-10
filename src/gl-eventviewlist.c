@@ -421,9 +421,9 @@ query_add_search_matches (GlQuery *query,
             gl_query_add_match (query, "MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
             gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
             gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, SEARCH_TYPE_SUBSTRING);
-            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
             gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
             gl_query_add_match (query, "_EXE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
         }
         break;
 
