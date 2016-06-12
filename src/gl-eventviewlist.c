@@ -59,11 +59,19 @@ typedef struct
     GtkWidget *parameter_treeview;
     GtkListStore *parameter_liststore;
     GtkWidget *search_type_revealer;
+    GtkWidget *range_stack;
+    GtkWidget *range_label_stack;
+    GtkWidget *range_treeview;
+    GtkWidget *range_button_label;
+    GtkWidget *clear_range_button;
+    GtkWidget *range_button_drop_down_image;
+    GtkListStore *range_liststore;
 
     gchar *search_text;
     const gchar *boot_match;
     gsize parameter_group;
     GlQuerySearchType search_type;
+    gsize range_group;
 } GlEventViewListPrivate;
 
 /* We define these two enum values as 2 and 3 to avoid the conflict with TRUE
@@ -87,6 +95,16 @@ typedef enum
     AUDIT_SESSION,
     EXECUTABLE_PATH
 } GlParameterGroups;
+
+typedef enum
+{
+    CURRENT_BOOT,
+    PREVIOUS_BOOT,
+    TODAY = 3,
+    YESTERDAY = 4,
+    LAST_3_DAYS = 5,
+    ENTIRE_JOURNAL = 7
+} GlRangeGroups;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GlEventViewList, gl_event_view_list, GTK_TYPE_BOX)
 
@@ -483,13 +501,110 @@ query_add_search_matches (GlQuery *query,
     }
 }
 
+static void
+query_set_day_timestamps (GlQuery *query,
+                          gint start_day_offset,
+                          gint end_day_offset)
+{
+    GDateTime *now;
+    GDateTime *today_start;
+    GDateTime *today_end;
+    guint64 start_timestamp;
+    guint64 end_timestamp;
+
+    now = g_date_time_new_now_local();
+
+    today_start = g_date_time_new_local (g_date_time_get_year (now),
+                                         g_date_time_get_month (now),
+                                         g_date_time_get_day_of_month (now) - start_day_offset,
+                                         23,
+                                         59,
+                                         59.0);
+
+    start_timestamp = g_date_time_to_unix (today_start) * G_USEC_PER_SEC;
+
+    today_end = g_date_time_new_local (g_date_time_get_year (now),
+                                       g_date_time_get_month (now),
+                                       g_date_time_get_day_of_month (now) - end_day_offset,
+                                       0,
+                                       0,
+                                       0.0);
+
+    end_timestamp = g_date_time_to_unix (today_end) * G_USEC_PER_SEC;
+
+    gl_query_set_journal_range (query, start_timestamp, end_timestamp);
+
+    g_date_time_unref (now);
+    g_date_time_unref (today_start);
+    g_date_time_unref (today_end);
+}
+
+static void
+query_add_journal_range_filter (GlQuery *query,
+                                GlEventViewList *view,
+                                gsize range_group,
+                                const gchar *current_boot_match)
+{
+    GArray *boot_ids;
+    GlJournalBootID *boot_id;
+
+    boot_ids = gl_event_view_list_get_boot_ids (view);
+
+    /* Add Range filters */
+    switch (range_group)
+    {
+        case CURRENT_BOOT:
+        {
+            /* Get current boot id */
+            gchar *boot_match;
+
+            boot_match = get_current_boot_id (current_boot_match);
+            gl_query_add_match (query, "_BOOT_ID", boot_match, SEARCH_TYPE_EXACT);
+
+            g_free (boot_match);
+        }
+        break;
+
+        case PREVIOUS_BOOT:
+        {
+            boot_id = &g_array_index (boot_ids, GlJournalBootID, boot_ids->len - 2);
+
+            gl_query_set_journal_range (query, boot_id->realtime_last, boot_id->realtime_first);
+        }
+        break;
+
+        case TODAY:
+        {
+            query_set_day_timestamps (query, 0, 0);
+        }
+        break;
+
+        case YESTERDAY:
+        {
+            query_set_day_timestamps (query, 1, 1);
+        }
+        break;
+
+        case LAST_3_DAYS:
+        {
+            query_set_day_timestamps (query, 0, 2);
+        }
+        break;
+
+        case ENTIRE_JOURNAL:
+        {
+
+        }
+        break;
+    }
+}
+
 /* Create Query Object according to GUI elements and set it on Journal Model */
 static GlQuery *
 create_query_object (GlEventViewList *view)
 {
     GlEventViewListPrivate *priv;
     GlQuery *query;
-    gchar *boot_id;
     GlCategoryList *list;
     GlCategoryListFilter filter;
 
@@ -499,11 +614,8 @@ create_query_object (GlEventViewList *view)
     /* Create new query object */
     query = gl_query_new ();
 
-    /* Get current boot id */
-    boot_id = get_current_boot_id (priv->boot_match);
-
-    /* Add boot match for all the categories */
-    gl_query_add_match (query, "_BOOT_ID", boot_id, SEARCH_TYPE_EXACT);
+    /* Set Journal Range */
+    query_add_journal_range_filter (query, view, priv->range_group, priv->boot_match);
 
     /* Add Exact Matches according to selected category */
     filter = gl_category_list_get_category (list);
@@ -570,8 +682,6 @@ create_query_object (GlEventViewList *view)
     query_add_search_matches (query, priv->parameter_group, priv->search_text, priv->search_type);
 
     query->is_search_field_exact = (priv->search_type == SEARCH_TYPE_EXACT);
-
-    g_free (boot_id);
 
     return query;
 }
@@ -776,6 +886,9 @@ search_popover_closed (GtkPopover *popover,
 
     gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-button");
     gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "what-label");
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
 }
 
 static void
@@ -792,6 +905,9 @@ select_parameter_button_clicked (GtkButton *button,
 
     gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-list");
     gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "select-parameter-label");
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
 
     /* Select the row in treeview which was shown in the parameter label */
     parameter_group_row = priv->parameter_group;
@@ -909,6 +1025,134 @@ search_type_changed (GtkToggleButton *togglebutton,
     gl_journal_model_take_query (priv->journal_model, query);
 }
 
+static void
+select_range_button_clicked (GtkButton *button,
+                             gpointer user_data)
+{
+    GlEventViewListPrivate *priv;
+    GtkTreeSelection *selection;
+    GtkTreePath *path;
+    gchar *path_string;
+    gsize range_group_row;
+
+    priv = gl_event_view_list_get_instance_private (GL_EVENT_VIEW_LIST (user_data));
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-list");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "show-log-from-label");
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_stack), "parameter-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "what-label");
+
+    /* Select the row in treeview which was shown in the parameter label */
+    range_group_row = priv->range_group;
+
+    path_string = g_strdup_printf ("%" G_GSIZE_FORMAT ":0", range_group_row);
+
+    path = gtk_tree_path_new_from_string (path_string);
+
+    selection = gtk_tree_view_get_selection (GTK_TREE_VIEW (priv->range_treeview));
+
+    gtk_tree_selection_select_path (selection, path);
+
+    gtk_tree_path_free (path);
+    g_free (path_string);
+}
+
+static gboolean
+range_treeview_row_seperator (GtkTreeModel *model,
+                              GtkTreeIter *iter,
+                              gpointer user_data)
+{
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+    gboolean show_seperator;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_tree_model_get (GTK_TREE_MODEL (priv->range_liststore), iter,
+                        2, &show_seperator,
+                        -1);
+
+    return show_seperator;
+}
+
+static void
+on_range_treeview_row_activated (GtkTreeView *tree_view,
+                                 GtkTreePath *path,
+                                 GtkTreeViewColumn *column,
+                                 gpointer user_data)
+{
+    GlQuery *query;
+    GtkTreeIter iter;
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+    gchar *range_label;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_tree_model_get_iter (GTK_TREE_MODEL (priv->range_liststore), &iter, path);
+
+    gtk_tree_model_get (GTK_TREE_MODEL (priv->range_liststore), &iter,
+                        0, &range_label,
+                        1, &priv->range_group,
+                        -1);
+
+    gtk_label_set_label (GTK_LABEL (priv->range_button_label),
+                         _(range_label));
+
+    /* Show "Clear Range" Button if other than "Current Boot" is selected */
+    if(priv->range_group == CURRENT_BOOT)
+    {
+        gtk_widget_hide (priv->clear_range_button);
+        gtk_widget_show (priv->range_button_drop_down_image);
+    }
+    else
+    {
+        gtk_widget_show (priv->clear_range_button);
+        gtk_widget_hide (priv->range_button_drop_down_image);
+    }
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
+
+    g_free (range_label);
+}
+
+static void
+clear_range_button_clicked (GtkButton *button,
+                            gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+    GlEventViewListPrivate *priv;
+    GlQuery *query;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_widget_hide (priv->clear_range_button);
+    gtk_widget_show (priv->range_button_drop_down_image);
+
+    gtk_label_set_label (GTK_LABEL (priv->range_button_label),
+                           _("Current Boot"));
+
+    priv->range_group = CURRENT_BOOT;
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
+}
+
 /* Get the view elements from ui file and link it with the drop down button */
 static void
 setup_search_popover (GlEventViewList *view)
@@ -936,6 +1180,16 @@ setup_search_popover (GlEventViewList *view)
     /* elements related to "search type" label */
     priv->search_type_revealer = GTK_WIDGET (gtk_builder_get_object (builder, "search_type_revealer"));
 
+    /* elements related to "when" range filter label */
+    priv->range_stack = GTK_WIDGET (gtk_builder_get_object (builder, "range_stack"));
+    priv->range_label_stack = GTK_WIDGET (gtk_builder_get_object (builder, "range_label_stack"));
+    priv->range_treeview = GTK_WIDGET (gtk_builder_get_object (builder, "range_treeview"));
+    priv->range_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "range_button_label"));
+    priv->clear_range_button = GTK_WIDGET (gtk_builder_get_object (builder, "clear_range_button"));
+    priv->range_button_drop_down_image = GTK_WIDGET (gtk_builder_get_object (builder, "range_button_drop_down_image"));
+
+    priv->range_liststore = GTK_LIST_STORE (gtk_builder_get_object (builder, "range_liststore"));
+
     /* Connect signals */
     gtk_builder_add_callback_symbols (builder,
                                       "select_parameter_button_clicked",
@@ -946,6 +1200,12 @@ setup_search_popover (GlEventViewList *view)
                                       G_CALLBACK (search_popover_closed),
                                       "search_type_changed",
                                       G_CALLBACK (search_type_changed),
+                                      "select_range_button_clicked",
+                                      G_CALLBACK (select_range_button_clicked),
+                                      "on_range_treeview_row_activated",
+                                      G_CALLBACK (on_range_treeview_row_activated),
+                                      "clear_range_button_clicked",
+                                      G_CALLBACK (clear_range_button_clicked),
                                       NULL);
 
     /* pass "GlEventviewlist *view" as user_data to signals as callback data*/
@@ -953,6 +1213,11 @@ setup_search_popover (GlEventViewList *view)
 
     gtk_tree_view_set_row_separator_func (GTK_TREE_VIEW (priv->parameter_treeview),
                                           (GtkTreeViewRowSeparatorFunc) parameter_treeview_row_seperator,
+                                          view,
+                                          NULL);
+
+    gtk_tree_view_set_row_separator_func (GTK_TREE_VIEW (priv->range_treeview),
+                                          (GtkTreeViewRowSeparatorFunc) range_treeview_row_seperator,
                                           view,
                                           NULL);
 
@@ -969,6 +1234,9 @@ setup_search_popover (GlEventViewList *view)
 
     /* Set Substring search as the default search type */
     priv->search_type = SEARCH_TYPE_SUBSTRING;
+
+    /* Set "Current Boot" as the default journal range */
+    priv->range_group = CURRENT_BOOT;
 
     g_object_unref (builder);
 }
