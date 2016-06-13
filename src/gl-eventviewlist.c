@@ -58,10 +58,12 @@ typedef struct
     GtkWidget *parameter_label_stack;
     GtkWidget *parameter_treeview;
     GtkListStore *parameter_liststore;
+    GtkWidget *search_type_revealer;
 
     gchar *search_text;
     const gchar *boot_match;
     gsize parameter_group;
+    GlQuerySearchType search_type;
 } GlEventViewListPrivate;
 
 /* We define these two enum values as 2 and 3 to avoid the conflict with TRUE
@@ -406,7 +408,8 @@ get_current_boot_id (const gchar *boot_match)
 static void
 query_add_search_matches (GlQuery *query,
                           gsize parameter_group,
-                          const gchar *search_text)
+                          const gchar *search_text,
+                          GlQuerySearchType search_type)
 {
     switch (parameter_group)
     {
@@ -426,55 +429,55 @@ query_add_search_matches (GlQuery *query,
 
         case PID:
         {
-            gl_query_add_match (query, "_PID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_PID", search_text, search_type);
         }
         break;
 
         case UID:
         {
-            gl_query_add_match (query, "_UID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_UID", search_text, search_type);
         }
         break;
 
         case GID:
         {
-            gl_query_add_match (query, "_GID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_GID", search_text, search_type);
         }
         break;
 
         case MESSAGE:
         {
-            gl_query_add_match (query, "MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "MESSAGE", search_text, search_type);
         }
         break;
 
         case PROCESS_NAME:
         {
-            gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_COMM", search_text, search_type);
         }
         break;
 
         case SYSTEMD_UNIT:
         {
-            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, search_type);
         }
         break;
 
         case KERNEL_DEVICE:
         {
-            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, search_type);
         }
         break;
 
         case AUDIT_SESSION:
         {
-            gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_AUDIT_SESSION", search_text, search_type);
         }
         break;
 
         case EXECUTABLE_PATH:
         {
-            gl_query_add_match (query, "_EXE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_EXE", search_text, search_type);
         }
         break;
     }
@@ -564,7 +567,9 @@ create_query_object (GlEventViewList *view)
     }
 
     /* Add Substring Matches */
-    query_add_search_matches (query, priv->parameter_group, priv->search_text);
+    query_add_search_matches (query, priv->parameter_group, priv->search_text, priv->search_type);
+
+    query->is_search_field_exact = (priv->search_type == SEARCH_TYPE_EXACT);
 
     g_free (boot_id);
 
@@ -852,6 +857,18 @@ on_treeview_row_activated (GtkTreeView *tree_view,
     gtk_label_set_label (GTK_LABEL (priv->parameter_button_label),
                          _(parameter_label));
 
+    /* Do not Show "Search Type" option if all available fields group is selected */
+    if (priv->parameter_group == ALL_AVAILABLE_FIELDS)
+    {
+        gtk_revealer_set_reveal_child (GTK_REVEALER (priv->search_type_revealer), FALSE);
+        gtk_widget_set_visible (priv->search_type_revealer, FALSE);
+    }
+    else
+    {
+        gtk_widget_set_visible (priv->search_type_revealer, TRUE);
+        gtk_revealer_set_reveal_child (GTK_REVEALER (priv->search_type_revealer), TRUE);
+    }
+
     /* Create the query object */
     query = create_query_object (view);
 
@@ -862,6 +879,34 @@ on_treeview_row_activated (GtkTreeView *tree_view,
     gtk_stack_set_visible_child_name (GTK_STACK (priv->parameter_label_stack), "what-label");
 
     g_free (parameter_label);
+}
+
+static void
+search_type_changed (GtkToggleButton *togglebutton,
+                     gpointer user_data)
+{
+    GlQuery *query;
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    if (gtk_toggle_button_get_active (togglebutton))
+    {
+        priv->search_type = SEARCH_TYPE_EXACT;
+    }
+    else
+    {
+        priv->search_type = SEARCH_TYPE_SUBSTRING;
+    }
+
+     /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
 }
 
 /* Get the view elements from ui file and link it with the drop down button */
@@ -888,6 +933,9 @@ setup_search_popover (GlEventViewList *view)
 
     priv->parameter_liststore = GTK_LIST_STORE (gtk_builder_get_object (builder, "parameter_liststore"));
 
+    /* elements related to "search type" label */
+    priv->search_type_revealer = GTK_WIDGET (gtk_builder_get_object (builder, "search_type_revealer"));
+
     /* Connect signals */
     gtk_builder_add_callback_symbols (builder,
                                       "select_parameter_button_clicked",
@@ -896,6 +944,8 @@ setup_search_popover (GlEventViewList *view)
                                       G_CALLBACK (on_treeview_row_activated),
                                       "search_popover_closed",
                                       G_CALLBACK (search_popover_closed),
+                                      "search_type_changed",
+                                      G_CALLBACK (search_type_changed),
                                       NULL);
 
     /* pass "GlEventviewlist *view" as user_data to signals as callback data*/
@@ -916,6 +966,9 @@ setup_search_popover (GlEventViewList *view)
 
     /* Set "All Available Fields" as default option in the select parameter button */
     priv->parameter_group = ALL_AVAILABLE_FIELDS;
+
+    /* Set Substring search as the default search type */
+    priv->search_type = SEARCH_TYPE_SUBSTRING;
 
     g_object_unref (builder);
 }

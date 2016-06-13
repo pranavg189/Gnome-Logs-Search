@@ -31,6 +31,7 @@ typedef enum
 typedef struct GlQuery
 {
     GPtrArray *queryitems;   /* array of GlQueryItem objects passed through eventviewlist */
+    gboolean is_search_field_exact;
 } GlQuery;
 
 #define GL_TYPE_JOURNAL_MODEL gl_journal_model_get_type()
