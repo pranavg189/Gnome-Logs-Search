@@ -485,13 +485,29 @@ tokenize_search_string (gchar *search_text)
     token_array = g_ptr_array_new_with_free_func (g_free);
     scanner = g_scanner_new (NULL);
     scanner->config->cset_skip_characters = " =\t\n";
+
+    /* All the characters used in the journal fields */
+    scanner->config->cset_identifier_first = (
+                                              G_CSET_a_2_z
+                                              G_CSET_A_2_Z
+                                              G_CSET_DIGITS
+                                              "/_.-@:\\+"
+                                              );
+
+    scanner->config->cset_identifier_nth = (
+                                            G_CSET_a_2_z
+                                            G_CSET_A_2_Z
+                                            G_CSET_DIGITS
+                                            "/_.-@:\\"
+                                            );
+
     g_scanner_input_text (scanner, search_text, strlen (search_text));
 
     do
     {
         g_scanner_get_next_token (scanner);
 
-        if (scanner->value.v_identifier == NULL && scanner->token != '+' && scanner->token != '/')
+        if (scanner->value.v_identifier == NULL && scanner->token != '+')
         {
             break;
         }
@@ -529,19 +545,6 @@ tokenize_search_string (gchar *search_text)
 
             field_name = g_strdup (scanner->value.v_identifier);
             g_ptr_array_add (token_array, field_name);
-        }
-        /* For detecting slashes in "Executable Path" parameter */
-        else if (scanner->token == '/')
-        {
-            if (scanner->value.v_identifier != NULL)
-            {
-                field_name = g_strdup (scanner->value.v_identifier);
-                g_ptr_array_add (token_array, field_name);
-            }
-            else
-            {
-                field_name = NULL;
-            }
         }
         else
         {
