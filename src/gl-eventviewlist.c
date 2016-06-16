@@ -63,15 +63,40 @@ typedef struct
     GtkWidget *range_label_stack;
     GtkWidget *range_treeview;
     GtkWidget *range_button_label;
-    GtkWidget *clear_range_button;
-    GtkWidget *range_button_drop_down_image;
     GtkListStore *range_liststore;
+    GtkWidget *search_popover_menu;
+
+    GtkWidget *start_date_stack;
+    GtkWidget *start_date_calendar_revealer;
+    GtkWidget *start_date_entry;
+    GtkWidget *start_date_button_label;
+
+    GtkWidget *start_time_stack;
+    GtkWidget *start_time_hour_spin;
+    GtkWidget *start_time_minute_spin;
+    GtkWidget *start_time_second_spin;
+    GtkWidget *start_time_period_spin;
+    GtkWidget *start_time_button_label;
+
+    GtkWidget *end_date_stack;
+    GtkWidget *end_date_calendar_revealer;
+    GtkWidget *end_date_entry;
+    GtkWidget *end_date_button_label;
+
+    GtkWidget *end_time_stack;
+    GtkWidget *end_time_hour_spin;
+    GtkWidget *end_time_minute_spin;
+    GtkWidget *end_time_second_spin;
+    GtkWidget *end_time_period_spin;
+    GtkWidget *end_time_button_label;
 
     gchar *search_text;
     const gchar *boot_match;
     gsize parameter_group;
     GlQuerySearchType search_type;
     gsize range_group;
+    guint64 custom_start_timestamp;
+    guint64 custom_end_timestamp;
 } GlEventViewListPrivate;
 
 /* We define these two enum values as 2 and 3 to avoid the conflict with TRUE
@@ -103,8 +128,15 @@ typedef enum
     TODAY = 3,
     YESTERDAY = 4,
     LAST_3_DAYS = 5,
-    ENTIRE_JOURNAL = 7
+    ENTIRE_JOURNAL = 7,
+    SET_CUSTOM_RANGE = 9
 } GlRangeGroups;
+
+typedef enum
+{
+    AM,
+    PM
+} GlTimePeriod;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GlEventViewList, gl_event_view_list, GTK_TYPE_BOX)
 
@@ -541,24 +573,25 @@ query_set_day_timestamps (GlQuery *query,
 
 static void
 query_add_journal_range_filter (GlQuery *query,
-                                GlEventViewList *view,
-                                gsize range_group,
-                                const gchar *current_boot_match)
+                                GlEventViewList *view)
 {
     GArray *boot_ids;
     GlJournalBootID *boot_id;
+    GlEventViewListPrivate *priv;
 
     boot_ids = gl_event_view_list_get_boot_ids (view);
 
+    priv = gl_event_view_list_get_instance_private (view);
+
     /* Add Range filters */
-    switch (range_group)
+    switch (priv->range_group)
     {
         case CURRENT_BOOT:
         {
             /* Get current boot id */
             gchar *boot_match;
 
-            boot_match = get_current_boot_id (current_boot_match);
+            boot_match = get_current_boot_id (priv->boot_match);
             gl_query_add_match (query, "_BOOT_ID", boot_match, SEARCH_TYPE_EXACT);
 
             g_free (boot_match);
@@ -596,6 +629,13 @@ query_add_journal_range_filter (GlQuery *query,
 
         }
         break;
+
+        case SET_CUSTOM_RANGE:
+        {
+            /* Set the values set in the custom range submenu */
+            gl_query_set_journal_range (query, priv->custom_start_timestamp, priv->custom_end_timestamp);
+        }
+        break;
     }
 }
 
@@ -615,7 +655,7 @@ create_query_object (GlEventViewList *view)
     query = gl_query_new ();
 
     /* Set Journal Range */
-    query_add_journal_range_filter (query, view, priv->range_group, priv->boot_match);
+    query_add_journal_range_filter (query, view);
 
     /* Add Exact Matches according to selected category */
     filter = gl_category_list_get_category (list);
@@ -723,6 +763,11 @@ gl_event_view_list_view_boot (GlEventViewList *view, const gchar *match)
     priv = gl_event_view_list_get_instance_private (view);
     categories = GL_CATEGORY_LIST (priv->categories);
     priv->boot_match = match;
+
+    /* Select "Current Boot" in When label */
+    priv->range_group = CURRENT_BOOT;
+
+    gtk_label_set_label (GTK_LABEL (priv->range_button_label), _("Current Boot"));
 
     on_notify_category (categories, NULL, view);
 }
@@ -1048,6 +1093,109 @@ select_range_button_clicked (GtkButton *button,
     g_free (path_string);
 }
 
+static void
+show_start_date_widgets (GlEventViewList *view, gboolean visible)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->start_date_stack),
+                                      visible ? "start-date-entry" : "start-date-button");
+
+    gtk_widget_set_visible (priv->start_date_calendar_revealer, visible);
+    gtk_revealer_set_reveal_child (GTK_REVEALER (priv->start_date_calendar_revealer), visible);
+}
+
+static void
+show_start_time_widgets (GlEventViewList *view, gboolean visible)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->start_time_stack),
+                                      visible ? "start-time-spinbutton" : "start-time-select-button");
+}
+
+static void
+show_end_date_widgets (GlEventViewList *view, gboolean visible)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->end_date_stack),
+                                      visible ? "end-date-entry" : "end-date-button");
+
+    gtk_widget_set_visible (priv->end_date_calendar_revealer, visible);
+    gtk_revealer_set_reveal_child (GTK_REVEALER (priv->end_date_calendar_revealer), visible);
+}
+
+static void
+show_end_time_widgets (GlEventViewList *view, gboolean visible)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->end_time_stack),
+                                      visible ? "end-time-spinbutton" : "end-time-select-button");
+}
+
+static void
+reset_custom_range_widgets (GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    priv->custom_start_timestamp = 0;
+    priv->custom_end_timestamp = 0;
+
+    /* Close any previously opened widgets in the submenu */
+    show_start_date_widgets (view, FALSE);
+    show_start_time_widgets (view, FALSE);
+    show_end_date_widgets (view, FALSE);
+    show_end_time_widgets (view, FALSE);
+
+    /* Reset start range elements */
+    gtk_entry_set_text (GTK_ENTRY (priv->start_date_entry), "");
+    gtk_label_set_label (GTK_LABEL (priv->start_date_button_label), "Select Start Date...");
+    gtk_label_set_label (GTK_LABEL (priv->start_time_button_label), "Select Start Time...");
+
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->start_time_minute_spin), 59.0);
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->start_time_second_spin), 59.0);
+
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->start_time_hour_spin), 11.0);
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->start_time_period_spin), PM);
+    }
+    else
+    {
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->start_time_hour_spin), 23.0);
+    }
+
+    /*Reset end range elements */
+    gtk_entry_set_text (GTK_ENTRY (priv->end_date_entry), "");
+    gtk_label_set_label (GTK_LABEL (priv->end_date_button_label), "Select End Date...");
+    gtk_label_set_label (GTK_LABEL (priv->end_time_button_label), "Select End Time...");
+
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->end_time_minute_spin), 0.0);
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->end_time_second_spin), 0.0);
+
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->end_time_hour_spin), 12.0);
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->end_time_period_spin), AM);
+    }
+    else
+    {
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (priv->end_time_hour_spin), 0.0);
+    }
+}
+
 static gboolean
 range_treeview_row_seperator (GtkTreeModel *model,
                               GtkTreeIter *iter,
@@ -1091,56 +1239,724 @@ on_range_treeview_row_activated (GtkTreeView *tree_view,
                         1, &priv->range_group,
                         -1);
 
-    gtk_label_set_label (GTK_LABEL (priv->range_button_label),
-                         _(range_label));
-
-    /* Show "Clear Range" Button if other than "Current Boot" is selected */
-    if(priv->range_group == CURRENT_BOOT)
+    if (priv->range_group == SET_CUSTOM_RANGE)
     {
-        gtk_widget_hide (priv->clear_range_button);
-        gtk_widget_show (priv->range_button_drop_down_image);
+        gtk_popover_menu_open_submenu (GTK_POPOVER_MENU (priv->search_popover_menu), "custom-range-submenu");
     }
     else
     {
-        gtk_widget_show (priv->clear_range_button);
-        gtk_widget_hide (priv->range_button_drop_down_image);
+        /* Reset the Custom Range elements if set as only one filter can be applied at time */
+        reset_custom_range_widgets (view);
+
+        gtk_label_set_label (GTK_LABEL (priv->range_button_label), _(range_label));
+
+        /* Create the query object */
+        query = create_query_object (view);
+
+        /* Set the created query on the journal model */
+        gl_journal_model_take_query (priv->journal_model, query);
+
+        gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+        gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
     }
-
-    /* Create the query object */
-    query = create_query_object (view);
-
-    /* Set the created query on the journal model */
-    gl_journal_model_take_query (priv->journal_model, query);
-
-    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
-    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
 
     g_free (range_label);
 }
 
 static void
-clear_range_button_clicked (GtkButton *button,
-                            gpointer user_data)
+start_date_button_clicked (GtkButton *button,
+                           gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    show_start_date_widgets (view, TRUE);
+    show_start_time_widgets (view, FALSE);
+    show_end_date_widgets (view, FALSE);
+    show_end_time_widgets (view, FALSE);
+}
+
+/* Utility function for converting hours from 12 hour format to 24 hour format */
+static void
+convert_hour (gint *hour, gint time_period)
+{
+    if (*hour == 12 && time_period == AM)
+    {
+        *hour = 0;
+    }
+    else if (*hour != 12 && time_period == PM)
+    {
+        *hour = *hour + 12;
+    }
+}
+
+static GDateTime *
+get_start_date_time (GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+    const gchar *entry_date;
+    GDateTime *now;
+    GDateTime *start_date_time;
+    GDate *start_date;
+    gint hour;
+    gint minute;
+    gint second;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    entry_date = gtk_entry_get_text (GTK_ENTRY (priv->start_date_entry));
+
+    hour = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->start_time_hour_spin));
+    minute = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->start_time_minute_spin));
+    second = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->start_time_second_spin));
+
+    /* Convert to 24 Hour format */
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        gint time_period;
+
+        time_period = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->start_time_period_spin));
+
+        convert_hour (&hour, time_period);
+    }
+
+    /* Parse the date entered into the Text Entry */
+    start_date = g_date_new ();
+    g_date_set_parse (start_date, entry_date);
+
+    now = g_date_time_new_now_local ();
+
+    /* If Invalid date, then take today's date as default */
+    if (!g_date_valid (start_date))
+    {
+        start_date_time = g_date_time_new_local (g_date_time_get_year (now),
+                                                 g_date_time_get_month (now),
+                                                 g_date_time_get_day_of_month (now),
+                                                 hour,
+                                                 minute,
+                                                 second);
+    }
+    else
+    {
+        start_date_time = g_date_time_new_local (g_date_get_year (start_date),
+                                                 g_date_get_month (start_date),
+                                                 g_date_get_day (start_date),
+                                                 hour,
+                                                 minute,
+                                                 second);
+    }
+
+    g_date_time_unref (now);
+    g_date_free (start_date);
+
+    return start_date_time;
+}
+
+static void
+update_range_button (GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+    gchar *range_button_label;
+    gchar *display_time;
+    GDateTime *now;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    now = g_date_time_new_now_local ();
+
+    /* Update range button label according to timestamps set in the custom range submenu */
+    if (priv->custom_end_timestamp && priv->custom_start_timestamp)
+    {
+        range_button_label = gl_util_boot_time_to_display (priv->custom_start_timestamp,
+                                                           priv->custom_end_timestamp);
+    }
+    else if (priv->custom_start_timestamp && !priv->custom_end_timestamp)
+    {
+        display_time = gl_util_timestamp_to_display (priv->custom_start_timestamp,
+                                                     now, priv->clock_format, FALSE);
+
+        range_button_label = g_strdup_printf (_("From %s"), display_time);
+
+        g_free (display_time);
+    }
+    else
+    {
+        display_time = gl_util_timestamp_to_display (priv->custom_end_timestamp,
+                                                     now, priv->clock_format, FALSE);
+
+        range_button_label = g_strdup_printf (_("Until %s"), display_time);
+
+        g_free (display_time);
+    }
+
+    gtk_label_set_label (GTK_LABEL (priv->range_button_label), range_button_label);
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
+
+    g_date_time_unref (now);
+    g_free (range_button_label);
+}
+
+static void
+start_date_calendar_day_selected (GtkCalendar *calendar,
+                                  gpointer user_data)
+{
+    GDateTime *date;
+    GDateTime *now;
+    guint year, month, day;
+    gchar *date_label;
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_calendar_get_date (calendar, &year, &month, &day);
+
+    date = g_date_time_new_local (year, month + 1, day, 0, 0, 0);
+
+    date_label = g_date_time_format (date, "%e %B %Y");
+
+    now = g_date_time_new_now_local ();
+
+    /* If a future date, fail silently */
+    if (g_date_time_compare (date, now) != 1)
+    {
+        GDateTime *start_date_time;
+        GlQuery *query;
+
+        gtk_entry_set_text (GTK_ENTRY (priv->start_date_entry), date_label);
+
+        gtk_label_set_label (GTK_LABEL (priv->start_date_button_label), date_label);
+
+        start_date_time = get_start_date_time (view);
+
+        priv->custom_start_timestamp = g_date_time_to_unix (start_date_time) * G_USEC_PER_SEC;
+
+        update_range_button (view);
+
+        /* Create the query object */
+        query = create_query_object (view);
+
+        /* Set the created query on the journal model */
+        gl_journal_model_take_query (priv->journal_model, query);
+
+        g_date_time_unref (start_date_time);
+    }
+
+    g_date_time_unref (date);
+}
+
+static void
+start_date_entry_activate (GtkEntry *entry,
+                           gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    if (gtk_entry_get_text_length (entry) > 0)
+    {
+        GDateTime *now;
+        GDateTime *date_time;
+        GDate *date;
+
+        date = g_date_new ();
+        g_date_set_parse (date, gtk_entry_get_text (entry));
+
+        /* Invalid date silently does nothing */
+        if (!g_date_valid (date))
+        {
+            g_date_free (date);
+            return;
+        }
+
+        now = g_date_time_new_now_local ();
+        date_time = g_date_time_new_local (g_date_get_year (date),
+                                           g_date_get_month (date),
+                                           g_date_get_day (date),
+                                           0,
+                                           0,
+                                           0);
+
+        /* Future dates silently fail */
+        if (g_date_time_compare (date_time, now) != 1)
+        {
+            GDateTime *start_date_time;
+            GlQuery *query;
+
+            gtk_label_set_label (GTK_LABEL (priv->start_date_button_label), gtk_entry_get_text(entry));
+
+            show_start_date_widgets (view, FALSE);
+
+            start_date_time = get_start_date_time (view);
+
+            priv->custom_start_timestamp = g_date_time_to_unix (start_date_time) * G_USEC_PER_SEC;
+
+            update_range_button (view);
+
+            /* Create the query object */
+            query = create_query_object (view);
+
+            /* Set the created query on the journal model */
+            gl_journal_model_take_query (priv->journal_model, query);
+
+            g_date_time_unref (start_date_time);
+        }
+
+        g_date_time_unref (now);
+        g_date_time_unref (date_time);
+        g_date_free (date);
+    }
+}
+
+static void
+start_time_button_clicked (GtkButton *button,
+                           gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    show_start_time_widgets (view, TRUE);
+    show_start_date_widgets (view, FALSE);
+    show_end_time_widgets (view, FALSE);
+    show_end_date_widgets (view, FALSE);
+}
+
+static void
+roundoff_invalid_time_value (GtkSpinButton *spin_button,
+                             gdouble *new_val,
+                             gint lower_limit,
+                             gint upper_limit)
+{
+    gint time;
+
+    time = atoi (gtk_entry_get_text (GTK_ENTRY (spin_button)));
+
+    /* Roundoff to the nearest limit if out of limits*/
+    if (time < lower_limit)
+    {
+        *new_val = lower_limit;
+    }
+    else if (time > upper_limit)
+    {
+        *new_val = upper_limit;
+    }
+    else
+    {
+        *new_val = time;
+    }
+}
+
+static gboolean
+spinbox_format_time_period_to_text (GtkSpinButton *spin_button,
+                                    gpointer user_data)
+{
+    gchar *time_period_string;
+    gint time_period;
+
+    time_period = gtk_spin_button_get_value_as_int (spin_button);
+
+    if (time_period == AM)
+    {
+        time_period_string = g_strdup_printf ("AM");
+    }
+    else
+    {
+        time_period_string = g_strdup_printf ("PM");
+    }
+
+    gtk_entry_set_text (GTK_ENTRY (spin_button), time_period_string);
+
+    g_free (time_period_string);
+
+    return TRUE;
+}
+
+static gint
+spinbox_format_time_period_to_int (GtkSpinButton *spin_button,
+                                   gdouble *time_period,
+                                   gpointer user_data)
+{
+    const gchar *time_period_string;
+
+    time_period_string = gtk_entry_get_text (GTK_ENTRY (spin_button));
+
+    if ( g_strcmp0 ("PM", time_period_string) == 0)
+    {
+        *time_period = PM;
+    }
+    /* Reset invalid values to "AM" */
+    else
+    {
+        *time_period = AM;
+    }
+
+    return TRUE;
+}
+
+/* Common event handler for validating spinbutton entry values */
+static gint
+spinbox_entry_validate_hour_min_sec (GtkSpinButton *spin_button,
+                                     gdouble *new_val,
+                                     gpointer user_data)
 {
     GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
     GlEventViewListPrivate *priv;
+    const gchar *spinbutton_id;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    spinbutton_id = gtk_buildable_get_name (GTK_BUILDABLE (spin_button));
+
+    /* Check if called from hour spinboxes */
+    if (g_strcmp0 (spinbutton_id, "end_time_hour_spin") == 0
+        || g_strcmp0 (spinbutton_id, "start_time_hour_spin") == 0)
+    {
+        if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_24HR)
+        {
+            roundoff_invalid_time_value (spin_button, new_val, 0, 23);
+        }
+        else
+        {
+            roundoff_invalid_time_value (spin_button, new_val, 1, 12);
+        }
+    }
+    else
+    {
+        roundoff_invalid_time_value (spin_button, new_val, 0, 59);
+    }
+
+    return TRUE;
+}
+
+static gboolean
+spinbox_entry_format_two_digits (GtkSpinButton *spin_button,
+                                 gpointer user_data)
+{
+    gchar *time_string;
+    gint value;
+
+    value = gtk_spin_button_get_value_as_int (spin_button);
+
+    time_string = g_strdup_printf ("%02d", value);
+
+    gtk_entry_set_text (GTK_ENTRY (spin_button), time_string);
+
+    g_free (time_string);
+
+    return TRUE;
+}
+
+/* Common event handler for setting query when any one of start time spinbutton changes */
+static void
+start_time_spinbox_value_changed (GtkSpinButton *spin_button,
+                                  gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+    GlEventViewListPrivate *priv;
+    GDateTime *start_date_time;
+    gchar *button_label;
     GlQuery *query;
 
     priv = gl_event_view_list_get_instance_private (view);
 
-    gtk_widget_hide (priv->clear_range_button);
-    gtk_widget_show (priv->range_button_drop_down_image);
+    start_date_time = get_start_date_time (view);
 
-    gtk_label_set_label (GTK_LABEL (priv->range_button_label),
-                           _("Current Boot"));
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        button_label = g_date_time_format (start_date_time, "%I:%M:%S %p");
+    }
+    else
+    {
+        button_label = g_date_time_format (start_date_time, "%T");
+    }
 
-    priv->range_group = CURRENT_BOOT;
+    gtk_label_set_label (GTK_LABEL (priv->start_time_button_label), button_label);
+
+    priv->custom_start_timestamp = g_date_time_to_unix (start_date_time) * G_USEC_PER_SEC;
+
+    update_range_button (view);
 
     /* Create the query object */
     query = create_query_object (view);
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
+}
+
+static void
+end_date_button_clicked (GtkButton *button,
+                         gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    show_end_date_widgets (view, TRUE);
+    show_end_time_widgets (view, FALSE);
+    show_start_date_widgets (view, FALSE);
+    show_start_time_widgets (view, FALSE);
+}
+
+static GDateTime *
+get_end_date_time (GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv;
+    const gchar *entry_date;
+    GDateTime *now;
+    GDateTime *end_date_time;
+    GDate *end_date;
+    gint hour;
+    gint minute;
+    gint second;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    entry_date = gtk_entry_get_text (GTK_ENTRY (priv->end_date_entry));
+
+    hour = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->end_time_hour_spin));
+    minute = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->end_time_minute_spin));
+    second = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->end_time_second_spin));
+
+    /* Convert to 24 Hour format */
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        gint time_period;
+
+        time_period = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (priv->end_time_period_spin));
+
+        convert_hour (&hour, time_period);
+    }
+
+    /* Parse the date entered into the Text Entry */
+    end_date = g_date_new ();
+    g_date_set_parse (end_date, entry_date);
+
+    now = g_date_time_new_now_local ();
+
+    /* If Invalid date, then take today's date as default */
+    if (!g_date_valid (end_date))
+    {
+        end_date_time = g_date_time_new_local (g_date_time_get_year (now),
+                                               g_date_time_get_month (now),
+                                               g_date_time_get_day_of_month (now),
+                                               hour,
+                                               minute,
+                                               second);
+    }
+    else
+    {
+        end_date_time = g_date_time_new_local (g_date_get_year (end_date),
+                                               g_date_get_month (end_date),
+                                               g_date_get_day (end_date),
+                                               hour,
+                                               minute,
+                                               second);
+    }
+
+    g_date_time_unref (now);
+    g_date_free (end_date);
+
+    return end_date_time;
+}
+
+static void
+end_date_calendar_day_selected (GtkCalendar *calendar,
+                                gpointer user_data)
+{
+    GDateTime *date;
+    GDateTime *now;
+    guint year, month, day;
+    gchar *date_label;
+    GlEventViewList *view;
+    GlEventViewListPrivate *priv;
+
+    view = GL_EVENT_VIEW_LIST (user_data);
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    gtk_calendar_get_date (calendar, &year, &month, &day);
+
+    date = g_date_time_new_local (year, month + 1, day, 0, 0, 0);
+
+    date_label = g_date_time_format (date, "%e %B %Y");
+
+    now = g_date_time_new_now_local ();
+
+    /* If a future date, fail silently */
+    if (g_date_time_compare (date, now) != 1)
+    {
+        GDateTime *end_date_time;
+        GlQuery *query;
+
+        gtk_entry_set_text (GTK_ENTRY (priv->end_date_entry), date_label);
+
+        gtk_label_set_label (GTK_LABEL (priv->end_date_button_label), date_label);
+
+        end_date_time = get_end_date_time (view);
+
+        priv->custom_end_timestamp = g_date_time_to_unix (end_date_time) * G_USEC_PER_SEC;
+
+        update_range_button (view);
+
+        /* Create the query object */
+        query = create_query_object (view);
+
+        /* Set the created query on the journal model */
+        gl_journal_model_take_query (priv->journal_model, query);
+
+        g_date_time_unref (end_date_time);
+    }
+
+    g_date_time_unref (date);
+}
+
+static void
+end_date_entry_activate (GtkEntry *entry,
+                         gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    if (gtk_entry_get_text_length (entry) > 0)
+    {
+        GDateTime *now;
+        GDateTime *date_time;
+        GDate *date;
+
+        date = g_date_new ();
+        g_date_set_parse (date, gtk_entry_get_text (entry));
+
+        /* Invalid date silently does nothing */
+        if (!g_date_valid (date))
+        {
+            g_date_free (date);
+            return;
+        }
+
+        now = g_date_time_new_now_local ();
+        date_time = g_date_time_new_local (g_date_get_year (date),
+                                           g_date_get_month (date),
+                                           g_date_get_day (date),
+                                           0,
+                                           0,
+                                           0);
+
+        /* Future dates silently fails */
+        if (g_date_time_compare (date_time, now) != 1)
+        {
+            GDateTime *end_date_time;
+            GlQuery *query;
+
+            gtk_label_set_label (GTK_LABEL (priv->end_date_button_label), gtk_entry_get_text(entry));
+
+            show_end_date_widgets (view, FALSE);
+
+            end_date_time = get_end_date_time (view);
+
+            priv->custom_end_timestamp = g_date_time_to_unix (end_date_time) * G_USEC_PER_SEC;
+
+            update_range_button (view);
+
+            /* Create the query object */
+            query = create_query_object (view);
+
+            /* Set the created query on the journal model */
+            gl_journal_model_take_query (priv->journal_model, query);
+
+            g_date_time_unref (end_date_time);
+        }
+
+        g_date_time_unref (now);
+        g_date_time_unref (date_time);
+        g_date_free (date);
+    }
+}
+
+static void
+end_time_button_clicked (GtkButton *button,
+                         gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+
+    show_end_time_widgets (view, TRUE);
+    show_end_date_widgets (view, FALSE);
+    show_start_time_widgets (view, FALSE);
+    show_start_date_widgets (view, FALSE);
+}
+
+static void
+end_time_spinbox_value_changed (GtkSpinButton *spin_button,
+                                gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+    GlEventViewListPrivate *priv;
+    GDateTime *end_date_time;
+    gchar *button_label;
+    GlQuery *query;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    end_date_time = get_end_date_time (view);
+
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_12HR)
+    {
+        button_label = g_date_time_format (end_date_time, "%I:%M:%S %p");
+    }
+    else
+    {
+        button_label = g_date_time_format (end_date_time, "%T");
+    }
+
+    gtk_label_set_label (GTK_LABEL (priv->end_time_button_label), button_label);
+
+    priv->custom_end_timestamp = g_date_time_to_unix (end_date_time) * G_USEC_PER_SEC;
+
+    update_range_button (view);
+
+    /* Create the query object */
+    query = create_query_object (view);
+
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
+}
+
+static void
+custom_range_submenu_back_button_clicked (GtkButton *button,
+                                          gpointer user_data)
+{
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    /* Default to Current boot if none of the timestamp was set */
+    if (!priv->custom_start_timestamp && !priv->custom_end_timestamp)
+    {
+        gchar *range_button_label;
+        GlQuery *query;
+
+        range_button_label = g_strdup_printf (_("Current Boot"));
+
+        gtk_label_set_label (GTK_LABEL (priv->range_button_label), range_button_label);
+
+        priv->range_group = CURRENT_BOOT;
+
+        /* Create the query object */
+        query = create_query_object (view);
+
+        /* Set the created query on the journal model */
+        gl_journal_model_take_query (priv->journal_model, query);
+
+        g_free (range_button_label);
+    }
+
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_stack), "range-button");
+    gtk_stack_set_visible_child_name (GTK_STACK (priv->range_label_stack), "when-label");
 }
 
 /* Get the view elements from ui file and link it with the drop down button */
@@ -1150,14 +1966,13 @@ setup_search_popover (GlEventViewList *view)
 
     GlEventViewListPrivate *priv;
     GtkBuilder *builder;
-    GtkWidget *search_popover_menu;
 
     priv = gl_event_view_list_get_instance_private (view);
 
     builder = gtk_builder_new_from_resource ("/org/gnome/Logs/gl-searchpopover.ui");
 
     /* Get elements from the view ui file */
-    search_popover_menu = GTK_WIDGET (gtk_builder_get_object (builder, "search_popover_menu"));
+    priv->search_popover_menu = GTK_WIDGET (gtk_builder_get_object (builder, "search_popover_menu"));
 
     /* elements related to "what" parameter filter label */
     priv->parameter_treeview = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_treeview"));
@@ -1175,10 +1990,59 @@ setup_search_popover (GlEventViewList *view)
     priv->range_label_stack = GTK_WIDGET (gtk_builder_get_object (builder, "range_label_stack"));
     priv->range_treeview = GTK_WIDGET (gtk_builder_get_object (builder, "range_treeview"));
     priv->range_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "range_button_label"));
-    priv->clear_range_button = GTK_WIDGET (gtk_builder_get_object (builder, "clear_range_button"));
-    priv->range_button_drop_down_image = GTK_WIDGET (gtk_builder_get_object (builder, "range_button_drop_down_image"));
 
     priv->range_liststore = GTK_LIST_STORE (gtk_builder_get_object (builder, "range_liststore"));
+
+    /* elements related to "Set Custom Range" submenu */
+    priv->start_date_stack = GTK_WIDGET (gtk_builder_get_object (builder, "start_date_stack"));
+    priv->start_date_calendar_revealer = GTK_WIDGET (gtk_builder_get_object (builder, "start_date_calendar_revealer"));
+    priv->start_date_entry = GTK_WIDGET (gtk_builder_get_object (builder, "start_date_entry"));
+    priv->start_date_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "start_date_button_label"));
+
+    priv->start_time_stack = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_stack"));
+    priv->start_time_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_button_label"));
+    priv->start_time_hour_spin = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_hour_spin"));
+    priv->start_time_minute_spin = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_minute_spin"));
+    priv->start_time_second_spin = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_second_spin"));
+    priv->start_time_period_spin = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_period_spin"));
+
+    priv->end_date_stack = GTK_WIDGET (gtk_builder_get_object (builder, "end_date_stack"));
+    priv->end_date_calendar_revealer = GTK_WIDGET (gtk_builder_get_object (builder, "end_date_calendar_revealer"));
+    priv->end_date_entry = GTK_WIDGET (gtk_builder_get_object (builder, "end_date_entry"));
+    priv->end_date_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "end_date_button_label"));
+
+    priv->end_time_stack = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_stack"));
+    priv->end_time_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_button_label"));
+    priv->end_time_hour_spin = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_hour_spin"));
+    priv->end_time_minute_spin = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_minute_spin"));
+    priv->end_time_second_spin = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_second_spin"));
+    priv->end_time_period_spin = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_period_spin"));
+
+    if (priv->clock_format == GL_UTIL_CLOCK_FORMAT_24HR)
+    {
+        GtkWidget *start_time_period_label;
+        GtkWidget *end_time_period_label;
+        GtkAdjustment *start_hour_adjustment;
+        GtkAdjustment *end_hour_adjustment;
+
+        start_time_period_label = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_period_label"));
+        end_time_period_label = GTK_WIDGET (gtk_builder_get_object (builder, "end_time_period_label"));
+
+        /* Hide the AM/PM time period spinbuttons */
+        gtk_widget_hide (priv->start_time_period_spin);
+        gtk_widget_hide (start_time_period_label);
+        gtk_widget_hide (priv->end_time_period_spin);
+        gtk_widget_hide (end_time_period_label);
+
+        /* Set 0-23 as range for hour spinbutton */
+        start_hour_adjustment = gtk_adjustment_new (23.0, 0.0, 23.0, 5.0, 0.0, 0.0);
+        end_hour_adjustment = gtk_adjustment_new (0.0, 0.0, 23.0, 5.0, 0.0, 0.0);
+
+        gtk_spin_button_set_adjustment (GTK_SPIN_BUTTON (priv->start_time_hour_spin),
+                                        start_hour_adjustment);
+        gtk_spin_button_set_adjustment (GTK_SPIN_BUTTON (priv->end_time_hour_spin),
+                                        end_hour_adjustment);
+    }
 
     /* Connect signals */
     gtk_builder_add_callback_symbols (builder,
@@ -1194,8 +2058,36 @@ setup_search_popover (GlEventViewList *view)
                                       G_CALLBACK (select_range_button_clicked),
                                       "on_range_treeview_row_activated",
                                       G_CALLBACK (on_range_treeview_row_activated),
-                                      "clear_range_button_clicked",
-                                      G_CALLBACK (clear_range_button_clicked),
+                                      "start_date_button_clicked",
+                                      G_CALLBACK (start_date_button_clicked),
+                                      "start_date_calendar_day_selected",
+                                      G_CALLBACK (start_date_calendar_day_selected),
+                                      "start_date_entry_activate",
+                                      G_CALLBACK (start_date_entry_activate),
+                                      "start_time_button_clicked",
+                                      G_CALLBACK (start_time_button_clicked),
+                                      "end_date_button_clicked",
+                                      G_CALLBACK (end_date_button_clicked),
+                                      "end_date_calendar_day_selected",
+                                      G_CALLBACK (end_date_calendar_day_selected),
+                                      "end_date_entry_activate",
+                                      G_CALLBACK (end_date_entry_activate),
+                                      "end_time_button_clicked",
+                                      G_CALLBACK (end_time_button_clicked),
+                                      "spinbox_entry_format_two_digits",
+                                      G_CALLBACK (spinbox_entry_format_two_digits),
+                                      "spinbox_entry_validate_hour_min_sec",
+                                      G_CALLBACK (spinbox_entry_validate_hour_min_sec),
+                                      "spinbox_format_time_period_to_int",
+                                      G_CALLBACK (spinbox_format_time_period_to_int),
+                                      "spinbox_format_time_period_to_text",
+                                      G_CALLBACK (spinbox_format_time_period_to_text),
+                                      "start_time_spinbox_value_changed",
+                                      G_CALLBACK (start_time_spinbox_value_changed),
+                                      "end_time_spinbox_value_changed",
+                                      G_CALLBACK (end_time_spinbox_value_changed),
+                                      "custom_range_submenu_back_button_clicked",
+                                      G_CALLBACK (custom_range_submenu_back_button_clicked),
                                       NULL);
 
     /* pass "GlEventviewlist *view" as user_data to signals as callback data*/
@@ -1212,12 +2104,12 @@ setup_search_popover (GlEventViewList *view)
                                           NULL);
 
     /* Grab/Remove keyboard focus from popover menu when it is opened or closed */
-    g_signal_connect (search_popover_menu, "show", (GCallback) gtk_widget_grab_focus, NULL);
-    g_signal_connect_swapped (search_popover_menu, "closed", (GCallback) gtk_widget_grab_focus, view);
+    g_signal_connect (priv->search_popover_menu, "show", (GCallback) gtk_widget_grab_focus, NULL);
+    g_signal_connect_swapped (priv->search_popover_menu, "closed", (GCallback) gtk_widget_grab_focus, view);
 
     /* Link the drop down button with search popover */
     gtk_menu_button_set_popover (GTK_MENU_BUTTON (priv->search_dropdown_button),
-                                 search_popover_menu);
+                                 priv->search_popover_menu);
 
     /* Set "All Available Fields" as default option in the select parameter button */
     priv->parameter_group = ALL_AVAILABLE_FIELDS;
@@ -1227,6 +2119,10 @@ setup_search_popover (GlEventViewList *view)
 
     /* Set "Current Boot" as the default journal range */
     priv->range_group = CURRENT_BOOT;
+
+    /* Set 0 as default for Custom timestamps */
+    priv->custom_start_timestamp = 0;
+    priv->custom_end_timestamp = 0;
 
     g_object_unref (builder);
 }
@@ -1295,8 +2191,6 @@ gl_event_view_list_init (GlEventViewList *view)
     priv->journal_model = gl_journal_model_new ();
     g_application_bind_busy_property (g_application_get_default (), priv->journal_model, "loading");
 
-    setup_search_popover (view);
-
     g_signal_connect (priv->event_scrolled, "edge-reached",
                       G_CALLBACK (gl_event_list_view_edge_reached), view);
 
@@ -1317,6 +2211,8 @@ gl_event_view_list_init (GlEventViewList *view)
     settings = g_settings_new (DESKTOP_SCHEMA);
     priv->clock_format = g_settings_get_enum (settings, CLOCK_FORMAT);
     g_object_unref (settings);
+
+    setup_search_popover (view);
 
     g_signal_connect (categories, "notify::category", G_CALLBACK (on_notify_category),
                       view);
