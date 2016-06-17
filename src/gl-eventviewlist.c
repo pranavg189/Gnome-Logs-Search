@@ -69,6 +69,7 @@ typedef struct
     GtkWidget *search_popover_menu;
 
     GtkWidget *start_time_spinbox_revealer;
+    GtkWidget *start_time_spinbox_grid;
     GtkWidget *start_time_stack;
     GtkWidget *start_time_button_drop_down_image;
     GtkWidget *start_time_clear_button;
@@ -1130,10 +1131,7 @@ show_start_time_widgets (GlEventViewList *view, gboolean visible)
     priv = gl_event_view_list_get_instance_private (view);
 
     gtk_stack_set_visible_child_name (GTK_STACK (priv->start_time_stack),
-                                      visible ? "start-time-set-button" : "start-time-select-button");
-
-    gtk_widget_set_visible (priv->start_time_spinbox_revealer, visible);
-    gtk_revealer_set_reveal_child (GTK_REVEALER (priv->start_time_spinbox_revealer), visible);
+                                      visible ? "start-time-spinbox" : "start-time-select-button");
 }
 
 static void
@@ -1292,6 +1290,8 @@ clear_range_button_clicked (GtkButton *button,
     gtk_widget_show (priv->range_button_drop_down_image);
 
     gtk_label_set_label (GTK_LABEL (priv->range_button_label), _("Current Boot"));
+
+    reset_custom_range_widgets (view);
 
     priv->range_group = CURRENT_BOOT;
 
@@ -1599,36 +1599,19 @@ start_time_set_button_clicked (GtkButton *button,
 }
 
 static void
-format_time_to_two_digits (GtkSpinButton *spin_button)
-{
-    gchar *time_string;
-    gint value;
-
-    value = gtk_spin_button_get_value_as_int (spin_button);
-
-    time_string = g_strdup_printf ("%02d", value);
-
-    gtk_entry_set_text (GTK_ENTRY (spin_button), time_string);
-
-    g_free (time_string);
-}
-
-static void
 roundoff_invalid_time_value (GtkSpinButton *spin_button,
                              gdouble *new_val,
                              gint lower_limit,
                              gint upper_limit)
 {
-    const gchar *entry_value;
     gint time;
 
-    entry_value = gtk_entry_get_text (GTK_ENTRY (spin_button));
-    time = atoi (entry_value);
+    time = atoi (gtk_entry_get_text (GTK_ENTRY (spin_button)));
 
     /* Roundoff to the nearest limit if out of limits*/
     if (time < lower_limit)
     {
-        *new_val = upper_limit;
+        *new_val = lower_limit;
     }
     else if (time > upper_limit)
     {
@@ -1640,112 +1623,121 @@ roundoff_invalid_time_value (GtkSpinButton *spin_button,
     }
 }
 
-static void
-spinbox_format_time_period_to_text (GtkSpinButton *spin_button)
+static gboolean
+spinbox_format_time_period_to_text (GtkSpinButton *spin_button,
+                                    gpointer user_data)
 {
-    gchar *ampm_string;
+    gchar *time_period_string;
+    gint time_period;
+
+    time_period = gtk_spin_button_get_value_as_int (spin_button);
+
+    if (time_period == AM)
+    {
+        time_period_string = g_strdup_printf ("AM");
+    }
+    else
+    {
+        time_period_string = g_strdup_printf ("PM");
+    }
+
+    gtk_entry_set_text (GTK_ENTRY (spin_button), time_period_string);
+
+    g_free (time_period_string);
+
+    return TRUE;
+}
+
+static gint
+spinbox_format_time_period_to_int (GtkSpinButton *spin_button,
+                                   gdouble *time_period,
+                                   gpointer user_data)
+{
+    const gchar *time_period_string;
+
+    time_period_string = gtk_entry_get_text (GTK_ENTRY (spin_button));
+
+    if ( g_strcmp0 ("PM", time_period_string) == 0)
+    {
+        *time_period = PM;
+    }
+    /* Reset invalid values to "AM" */
+    else
+    {
+        *time_period = AM;
+    }
+
+    return TRUE;
+}
+
+static gint
+spinbox_entry_validate_hour_min_sec (GtkSpinButton *spin_button,
+                                     gdouble *new_val,
+                                     gpointer user_data)
+{
+    const gchar *spinbutton_id;
+
+    spinbutton_id = gtk_buildable_get_name (GTK_BUILDABLE (spin_button));
+
+    /* Check if called from hour spinboxes */
+    if (g_strcmp0 (spinbutton_id, "end_time_hour_spin") == 0
+        || g_strcmp0 (spinbutton_id, "start_time_hour_spin") == 0)
+    {
+        roundoff_invalid_time_value (spin_button, new_val, 1, 12);
+    }
+    else
+    {
+        roundoff_invalid_time_value (spin_button, new_val, 0, 59);
+    }
+
+    return TRUE;
+}
+
+static gboolean
+spinbox_entry_format_two_digits (GtkSpinButton *spin_button,
+                                 gpointer user_data)
+{
+    gchar *time_string;
     gint value;
 
     value = gtk_spin_button_get_value_as_int (spin_button);
 
-    if (value == AM)
-    {
-        ampm_string = g_strdup_printf ("AM");
-    }
-    else
-    {
-        ampm_string = g_strdup_printf ("PM");
-    }
+    time_string = g_strdup_printf ("%02d", value);
 
-    gtk_entry_set_text (GTK_ENTRY (spin_button), ampm_string);
+    gtk_entry_set_text (GTK_ENTRY (spin_button), time_string);
 
-    g_free (ampm_string);
+    g_free (time_string);
+
+    return TRUE;
 }
 
 static void
-spinbox_format_time_period_to_int (GtkSpinButton *spin_button,
-                                   gdouble *new_val)
+start_time_spinbox_value_changed (GtkSpinButton *spin_button,
+                                  gpointer user_data)
 {
-    const gchar *entry_value;
+    GlEventViewList *view = GL_EVENT_VIEW_LIST (user_data);
+    GlEventViewListPrivate *priv;
+    GDateTime *start_date_time;
+    gchar *button_label;
+    GlQuery *query;
 
-    entry_value = gtk_entry_get_text (GTK_ENTRY (spin_button));
+    priv = gl_event_view_list_get_instance_private (view);
 
-    if ( g_strcmp0 ("PM", entry_value) == 0)
-    {
-        *new_val = PM;
-    }
-    else
-    {
-        *new_val = AM;
-    }
-}
+    start_date_time = get_start_date_time (view);
 
-static gint
-start_time_ampm_spin_input (GtkSpinButton *spin_button,
-                            gdouble *new_val,
-                            gpointer user_data)
-{
-    spinbox_format_time_period_to_int (spin_button, new_val);
-    return TRUE;
-}
+    button_label = g_date_time_format (start_date_time, "%I:%M:%S %p");
 
-static gboolean
-start_time_ampm_spin_output (GtkSpinButton *spin_button,
-                             gpointer data)
-{
-    spinbox_format_time_period_to_text (spin_button);
-    return TRUE;
-}
+    gtk_label_set_label (GTK_LABEL (priv->start_time_button_label), button_label);
 
-static gint
-start_time_minute_spin_input (GtkSpinButton *spin_button,
-                              gdouble *new_val,
-                              gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 0, 59);
-    return TRUE;
-}
+    priv->custom_start_timestamp = g_date_time_to_unix (start_date_time) * G_USEC_PER_SEC;
 
-static gboolean
-start_time_minute_spin_output (GtkSpinButton *spin_button,
-                               gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
-}
+    update_range_button (view);
 
-static gint
-start_time_second_spin_input (GtkSpinButton *spin_button,
-                              gdouble *new_val,
-                              gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 0, 59);
-    return TRUE;
-}
+    /* Create the query object */
+    query = create_query_object (view);
 
-static gboolean
-start_time_second_spin_output (GtkSpinButton *spin_button,
-                               gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
-}
-
-static gint
-start_time_hour_spin_input (GtkSpinButton *spin_button,
-                            gdouble *new_val,
-                            gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 1, 12);
-    return TRUE;
-}
-
-static gboolean
-start_time_hour_spin_output (GtkSpinButton *spin_button,
-                             gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
+    /* Set the created query on the journal model */
+    gl_journal_model_take_query (priv->journal_model, query);
 }
 
 static void
@@ -1979,74 +1971,6 @@ end_time_set_button_clicked (GtkButton *button,
     g_date_time_unref (end_date_time);
 }
 
-static gint
-end_time_ampm_spin_input (GtkSpinButton *spin_button,
-                          gdouble *new_val,
-                          gpointer user_data)
-{
-    spinbox_format_time_period_to_int (spin_button, new_val);
-    return TRUE;
-}
-
-static gboolean
-end_time_ampm_spin_output (GtkSpinButton *spin_button,
-                           gpointer data)
-{
-    spinbox_format_time_period_to_text (spin_button);
-    return TRUE;
-}
-
-static gint
-end_time_minute_spin_input (GtkSpinButton *spin_button,
-                            gdouble *new_val,
-                            gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 0, 59);
-    return TRUE;
-}
-
-static gboolean
-end_time_minute_spin_output (GtkSpinButton *spin_button,
-                             gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
-}
-
-static gint
-end_time_second_spin_input (GtkSpinButton *spin_button,
-                            gdouble *new_val,
-                            gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 0, 59);
-    return TRUE;
-}
-
-static gboolean
-end_time_second_spin_output (GtkSpinButton *spin_button,
-                             gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
-}
-
-static gint
-end_time_hour_spin_input (GtkSpinButton *spin_button,
-                          gdouble *new_val,
-                          gpointer user_data)
-{
-    roundoff_invalid_time_value (spin_button, new_val, 1, 12);
-    return TRUE;
-}
-
-static gboolean
-end_time_hour_spin_output (GtkSpinButton *spin_button,
-                           gpointer data)
-{
-    format_time_to_two_digits (spin_button);
-    return TRUE;
-}
-
 static void
 custom_range_submenu_back_button_clicked (GtkButton *button,
                                           gpointer user_data)
@@ -2128,6 +2052,7 @@ setup_search_popover (GlEventViewList *view)
     priv->start_date_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "start_date_button_label"));
 
     priv->start_time_spinbox_revealer = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_spinbox_revealer"));
+    priv->start_time_spinbox_grid = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_spinbox_grid"));
     priv->start_time_button_label = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_button_label"));
     priv->start_time_stack = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_stack"));
     priv->start_time_button_drop_down_image = GTK_WIDGET (gtk_builder_get_object (builder, "start_time_button_drop_down_image"));
@@ -2177,22 +2102,6 @@ setup_search_popover (GlEventViewList *view)
                                       G_CALLBACK (start_time_button_clicked),
                                       "start_time_set_button_clicked",
                                       G_CALLBACK (start_time_set_button_clicked),
-                                      "start_time_ampm_spin_input",
-                                      G_CALLBACK (start_time_ampm_spin_input),
-                                      "start_time_ampm_spin_output",
-                                      G_CALLBACK (start_time_ampm_spin_output),
-                                      "start_time_minute_spin_input",
-                                      G_CALLBACK (start_time_minute_spin_input),
-                                      "start_time_minute_spin_output",
-                                      G_CALLBACK (start_time_minute_spin_output),
-                                      "start_time_second_spin_input",
-                                      G_CALLBACK (start_time_second_spin_input),
-                                      "start_time_second_spin_output",
-                                      G_CALLBACK (start_time_second_spin_output),
-                                      "start_time_hour_spin_input",
-                                      G_CALLBACK (start_time_hour_spin_input),
-                                      "start_time_hour_spin_output",
-                                      G_CALLBACK (start_time_hour_spin_output),
                                       "end_date_button_clicked",
                                       G_CALLBACK (end_date_button_clicked),
                                       "end_date_calendar_day_selected",
@@ -2203,24 +2112,18 @@ setup_search_popover (GlEventViewList *view)
                                       G_CALLBACK (end_time_button_clicked),
                                       "end_time_set_button_clicked",
                                       G_CALLBACK (end_time_set_button_clicked),
-                                      "end_time_ampm_spin_input",
-                                      G_CALLBACK (end_time_ampm_spin_input),
-                                      "end_time_ampm_spin_output",
-                                      G_CALLBACK (end_time_ampm_spin_output),
-                                      "end_time_minute_spin_input",
-                                      G_CALLBACK (end_time_minute_spin_input),
-                                      "end_time_minute_spin_output",
-                                      G_CALLBACK (end_time_minute_spin_output),
-                                      "end_time_second_spin_input",
-                                      G_CALLBACK (end_time_second_spin_input),
-                                      "end_time_second_spin_output",
-                                      G_CALLBACK (end_time_second_spin_output),
-                                      "end_time_hour_spin_input",
-                                      G_CALLBACK (end_time_hour_spin_input),
-                                      "end_time_hour_spin_output",
-                                      G_CALLBACK (end_time_hour_spin_output),
                                       "custom_range_submenu_back_button_clicked",
                                       G_CALLBACK (custom_range_submenu_back_button_clicked),
+                                      "spinbox_entry_format_two_digits",
+                                      G_CALLBACK (spinbox_entry_format_two_digits),
+                                      "spinbox_entry_validate_hour_min_sec",
+                                      G_CALLBACK (spinbox_entry_validate_hour_min_sec),
+                                      "spinbox_format_time_period_to_int",
+                                      G_CALLBACK (spinbox_format_time_period_to_int),
+                                      "spinbox_format_time_period_to_text",
+                                      G_CALLBACK (spinbox_format_time_period_to_text),
+                                      "start_time_spinbox_value_changed",
+                                      G_CALLBACK (start_time_spinbox_value_changed),
                                       NULL);
 
     /* pass "GlEventviewlist *view" as user_data to signals as callback data*/

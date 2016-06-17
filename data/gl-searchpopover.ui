@@ -553,6 +553,8 @@
                                 <property name="can_focus">False</property>
                                 <property name="transition_duration">250</property>
                                 <property name="transition_type">crossfade</property>
+                                <property name="vhomogeneous">False</property>
+                                <property name="transition_type">GTK_STACK_TRANSITION_TYPE_SLIDE_UP_DOWN</property>
                                 <child>
                                     <object class="GtkButton" id="start_time_button">
                                         <property name="visible">True</property>
@@ -598,37 +600,7 @@
                                     </packing>
                                 </child>
                                 <child>
-                                    <object class="GtkButton" id="start_time_set_button">
-                                        <property name="visible">True</property>
-                                        <property name="can_focus">True</property>
-                                        <property name="receives_default">True</property>
-                                        <property name="tooltip_text" translatable="yes">Set the time</property>
-                                        <signal name="clicked" handler="start_time_set_button_clicked"/>
-                                        <child>
-                                            <object class="GtkLabel" id="start_time_set_button_label">
-                                                <property name="visible">True</property>
-                                                <property name="can_focus">False</property>
-                                                <property name="label" translatable="yes">Set Start Time</property>
-                                            </object>
-                                        </child>
-                                    </object>
-                                    <packing>
-                                        <property name="name">start-time-set-button</property>
-                                        <property name="position">1</property>
-                                    </packing>
-                                </child>
-                            </object>
-                            <packing>
-                                <property name="left_attach">0</property>
-                                <property name="top_attach">3</property>
-                                <property name="width">2</property>
-                            </packing>
-                        </child>
-                        <child>
-                            <object class="GtkRevealer" id="start_time_spinbox_revealer">
-                                <property name="can_focus">False</property>
-                                <child>
-                                    <object class="GtkGrid" id="start-time-spinbox-grid">
+                                    <object class="GtkGrid" id="start_time_spinbox_grid">
                                         <property name="visible">True</property>
                                         <property name="can_focus">False</property>
                                         <property name="border_width">20</property>
@@ -659,8 +631,9 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="start_time_hour_spin_output"/>
-                                                <signal name="input" handler="start_time_hour_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
+                                                <signal name="value-changed" handler="start_time_spinbox_value_changed"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">0</property>
@@ -693,8 +666,9 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="start_time_minute_spin_output"/>
-                                                <signal name="input" handler="start_time_minute_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
+                                                <signal name="value-changed" handler="start_time_spinbox_value_changed"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">1</property>
@@ -727,8 +701,9 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="start_time_second_spin_output"/>
-                                                <signal name="input" handler="start_time_second_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
+                                                <signal name="value-changed" handler="start_time_spinbox_value_changed"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">2</property>
@@ -761,8 +736,9 @@
                                                 <property name="adjustment">start_time_ampm_adjustment</property>
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
-                                                <signal name="input" handler="start_time_ampm_spin_input"/>
-                                                <signal name="output" handler="start_time_ampm_spin_output"/>
+                                                <signal name="input" handler="spinbox_format_time_period_to_int"/>
+                                                <signal name="output" handler="spinbox_format_time_period_to_text"/>
+                                                <signal name="value-changed" handler="start_time_spinbox_value_changed"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">3</property>
@@ -771,11 +747,14 @@
                                             </packing>
                                         </child>
                                     </object>
+                                    <packing>
+                                        <property name="name">start-time-spinbox</property>
+                                    </packing>
                                 </child>
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">4</property>
+                                <property name="top_attach">3</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
@@ -791,7 +770,7 @@
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">5</property>
+                                <property name="top_attach">4</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
@@ -859,7 +838,7 @@
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">6</property>
+                                <property name="top_attach">5</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
@@ -881,7 +860,7 @@
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">7</property>
+                                <property name="top_attach">6</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
@@ -958,7 +937,7 @@
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">8</property>
+                                <property name="top_attach">7</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
@@ -997,8 +976,8 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="end_time_hour_spin_output"/>
-                                                <signal name="input" handler="end_time_hour_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">0</property>
@@ -1031,8 +1010,8 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="end_time_minute_spin_output"/>
-                                                <signal name="input" handler="end_time_minute_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">1</property>
@@ -1065,8 +1044,8 @@
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
                                                 <property name="numeric">True</property>
-                                                <signal name="output" handler="end_time_second_spin_output"/>
-                                                <signal name="input" handler="end_time_second_spin_input"/>
+                                                <signal name="output" handler="spinbox_entry_format_two_digits"/>
+                                                <signal name="input" handler="spinbox_entry_validate_hour_min_sec"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">2</property>
@@ -1099,8 +1078,8 @@
                                                 <property name="adjustment">end_time_ampm_adjustment</property>
                                                 <property name="wrap">1</property>
                                                 <property name="max-length">2</property>
-                                                <signal name="input" handler="end_time_ampm_spin_input"/>
-                                                <signal name="output" handler="end_time_ampm_spin_output"/>
+                                                <signal name="input" handler="spinbox_format_time_period_to_int"/>
+                                                <signal name="output" handler="spinbox_format_time_period_to_text"/>
                                             </object>
                                             <packing>
                                                 <property name="left_attach">3</property>
@@ -1113,7 +1092,7 @@
                             </object>
                             <packing>
                                 <property name="left_attach">0</property>
-                                <property name="top_attach">9</property>
+                                <property name="top_attach">8</property>
                                 <property name="width">2</property>
                             </packing>
                         </child>
