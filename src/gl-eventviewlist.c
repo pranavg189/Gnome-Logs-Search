@@ -90,6 +90,8 @@ typedef struct
     GtkWidget *end_time_period_spin;
     GtkWidget *end_time_button_label;
 
+    GtkWidget *menu_stack;
+
     gchar *search_text;
     const gchar *boot_match;
     gsize parameter_group;
@@ -1241,7 +1243,7 @@ on_range_treeview_row_activated (GtkTreeView *tree_view,
 
     if (priv->range_group == SET_CUSTOM_RANGE)
     {
-        gtk_popover_menu_open_submenu (GTK_POPOVER_MENU (priv->search_popover_menu), "custom-range-submenu");
+        gtk_stack_set_visible_child_name (GTK_STACK (priv->menu_stack), "custom-range-submenu");
     }
     else
     {
@@ -1973,6 +1975,8 @@ setup_search_popover (GlEventViewList *view)
 
     /* Get elements from the view ui file */
     priv->search_popover_menu = GTK_WIDGET (gtk_builder_get_object (builder, "search_popover_menu"));
+
+    priv->menu_stack = GTK_WIDGET (gtk_builder_get_object (builder, "menu_stack"));
 
     /* elements related to "what" parameter filter label */
     priv->parameter_treeview = GTK_WIDGET (gtk_builder_get_object (builder, "parameter_treeview"));
