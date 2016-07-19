@@ -128,25 +128,6 @@ on_quit (GSimpleAction *action,
 }
 
 static void
-on_sort_order_changed (GSettings *settings,
-                       const gchar *key,
-                       GlApplication *application)
-{
-    GList *window;
-    gint sort_order;
-
-    window = gtk_application_get_windows (GTK_APPLICATION (application));
-    sort_order = g_settings_get_enum (settings, SORT_ORDER);
-
-    /* refresh the event view list for every logs window */
-    while (window != NULL)
-    {
-        gl_window_set_sort_order (window->data, sort_order);
-        window = g_list_next (window);
-    }
-}
-
-static void
 on_monospace_font_name_changed (GSettings *settings,
                                 const gchar *key,
                                 GlApplicationPrivate *priv)
@@ -289,10 +270,6 @@ gl_application_init (GlApplication *application)
     priv->settings = g_settings_new (SETTINGS_SCHEMA);
     action = g_settings_create_action (priv->settings, SORT_ORDER);
     g_action_map_add_action (G_ACTION_MAP (application), action);
-
-    g_signal_connect (priv->settings, "changed::sort-order",
-                      G_CALLBACK (on_sort_order_changed),
-                      application);
 
     g_object_unref (action);
     g_free (changed_font);

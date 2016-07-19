@@ -30,13 +30,11 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (GlEventViewList, gl_event_view_list, GL, EVENT_VIEW_LIST, GtkListBox)
 
 GtkWidget * gl_event_view_list_new (void);
-void gl_event_view_list_search (GlEventViewList *view, const gchar *needle);
 GlJournalEntry *gl_event_view_list_get_detail_entry (GlEventViewList *view);
 gboolean gl_event_view_list_handle_search_event (GlEventViewList *view,
                                                  GAction *action,
                                                  GdkEvent *event);
 void gl_event_view_list_set_search_mode (GlEventViewList *view, gboolean state);
-void gl_event_view_list_set_sort_order (GlEventViewList *view, GlSortOrder  sort_order);
 void gl_event_view_list_view_boot (GlEventViewList *view, const gchar *match);
 GArray * gl_event_view_list_get_boot_ids (GlEventViewList *view);
 gchar * gl_event_view_list_get_output_logs (GlEventViewList *view);

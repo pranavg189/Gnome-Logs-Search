@@ -471,7 +471,6 @@ on_notify_category (GlCategoryList *list,
     GlEventViewList *view;
     GlEventViewListPrivate *priv;
     GSettings *settings;
-    gint sort_order;
     GlQuery *query;
 
     view = GL_EVENT_VIEW_LIST (user_data);
@@ -484,9 +483,7 @@ on_notify_category (GlCategoryList *list,
     gl_journal_model_take_query (priv->journal_model, query);
 
     settings = g_settings_new (SETTINGS_SCHEMA);
-    sort_order = g_settings_get_enum (settings, SORT_ORDER);
     g_object_unref (settings);
-    gl_event_view_list_set_sort_order (view, sort_order);
 }
 
 void
@@ -502,91 +499,6 @@ gl_event_view_list_view_boot (GlEventViewList *view, const gchar *match)
     priv->boot_match = match;
 
     on_notify_category (categories, NULL, view);
-}
-
-static gint
-gl_event_view_sort_by_ascending_time (GtkListBoxRow *row1,
-                                      GtkListBoxRow *row2)
-{
-    GlJournalEntry *entry1;
-    GlJournalEntry *entry2;
-    guint64 time1;
-    guint64 time2;
-
-    entry1 = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (row1));
-    entry2 = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (row2));
-    time1 = gl_journal_entry_get_timestamp (entry1);
-    time2 = gl_journal_entry_get_timestamp (entry2);
-
-    if (time1 > time2)
-    {
-        return 1;
-    }
-    else if (time1 < time2)
-    {
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-static gint
-gl_event_view_sort_by_descending_time (GtkListBoxRow *row1,
-                                       GtkListBoxRow *row2)
-{
-    GlJournalEntry *entry1;
-    GlJournalEntry *entry2;
-    guint64 time1;
-    guint64 time2;
-
-    entry1 = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (row1));
-    entry2 = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (row2));
-    time1 = gl_journal_entry_get_timestamp (entry1);
-    time2 = gl_journal_entry_get_timestamp (entry2);
-
-    if (time1 > time2)
-    {
-        return -1;
-    }
-    else if (time1 < time2)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-void
-gl_event_view_list_set_sort_order (GlEventViewList *view,
-                                   GlSortOrder sort_order)
-{
-    GlEventViewListPrivate *priv;
-
-    g_return_if_fail (GL_EVENT_VIEW_LIST (view));
-
-    priv = gl_event_view_list_get_instance_private (view);
-
-    switch (sort_order)
-    {
-        case GL_SORT_ORDER_ASCENDING_TIME:
-            gtk_list_box_set_sort_func (GTK_LIST_BOX (priv->entries_box),
-                                        (GtkListBoxSortFunc) gl_event_view_sort_by_ascending_time,
-                                        NULL, NULL);
-            break;
-        case GL_SORT_ORDER_DESCENDING_TIME:
-            gtk_list_box_set_sort_func (GTK_LIST_BOX (priv->entries_box),
-                                        (GtkListBoxSortFunc) gl_event_view_sort_by_descending_time,
-                                        NULL, NULL);
-            break;
-        default:
-            g_assert_not_reached ();
-            break;
-    }
-
 }
 
 static void
@@ -737,25 +649,6 @@ gl_event_view_list_init (GlEventViewList *view)
 
     g_signal_connect (categories, "notify::category", G_CALLBACK (on_notify_category),
                       view);
-}
-
-void
-gl_event_view_list_search (GlEventViewList *view,
-                           const gchar *needle)
-{
-    GlEventViewListPrivate *priv;
-
-    g_return_if_fail (GL_EVENT_VIEW_LIST (view));
-
-    priv = gl_event_view_list_get_instance_private (view);
-
-    g_free (priv->search_text);
-    priv->search_text = g_strdup (needle);
-
-    /* for search, we need all entries - tell the model to fetch them */
-    gl_journal_model_fetch_more_entries (priv->journal_model, TRUE);
-
-    gtk_list_box_invalidate_filter (priv->entries_box);
 }
 
 GtkWidget *
