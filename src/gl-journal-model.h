@@ -31,6 +31,7 @@ typedef enum
 typedef struct GlQuery
 {
     GPtrArray *queryitems;   /* array of GlQueryItem structs */
+    GlQuerySearchType search_type;    /* indicates if search field is passed as exact match */
 } GlQuery;
 
 #define GL_TYPE_JOURNAL_MODEL gl_journal_model_get_type()
@@ -60,5 +61,8 @@ GArray *                gl_journal_model_get_boot_ids                   (GlJourn
 
 gchar *                 gl_journal_model_get_current_boot_time          (GlJournalModel *model,
                                                                          const gchar *boot_match);
+
+void                    gl_query_set_search_type                        (GlQuery *query,
+                                                                         GlQuerySearchType search_type);
 
 #endif

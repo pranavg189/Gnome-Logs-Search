@@ -2,6 +2,7 @@
 #define GL_SEARCH_POPOVER_H_
 
 #include <gtk/gtk.h>
+#include "gl-journal-model.h"
 
 G_BEGIN_DECLS
 
@@ -24,6 +25,10 @@ typedef enum
 G_DECLARE_FINAL_TYPE (GlSearchPopover, gl_search_popover, GL, SEARCH_POPOVER, GtkPopover)
 
 GtkWidget * gl_search_popover_new (void);
+GlQuerySearchType gl_search_popover_get_query_search_type (GlSearchPopover *popover);
+
+GType gl_query_search_type_get_type (void);
+#define GL_TYPE_QUERY_SEARCH_TYPE (gl_query_search_type_get_type())
 
 G_END_DECLS
 
