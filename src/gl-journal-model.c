@@ -82,7 +82,21 @@ gl_journal_model_fetch_idle (gpointer user_data)
         {
             model->n_entries_to_fetch--;
             g_ptr_array_add (model->entries, entry);
-            g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+
+            g_print("message: %s\n", gl_journal_entry_get_message(model->entries->pdata[last]));
+            // indicate addition of entries in descending order
+           // g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+            if(last > 0)
+            {
+                g_ptr_array_add (model->entries, g_ptr_array_index(model->entries,last-1));
+                model->entries->pdata[last-1]= entry;
+                g_list_model_items_changed (G_LIST_MODEL (model), last-1, 0, 1);
+            }
+            else
+            {
+                g_ptr_array_add (model->entries, entry);
+                g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+            }
         }
     }
     else
@@ -97,6 +111,23 @@ gl_journal_model_fetch_idle (gpointer user_data)
     }
     else
     {
+        g_print("last: %d\n", last);
+
+        // clear "entries" array
+        //g_list_model_items_changed (G_LIST_MODEL (model), 0, last, 0);
+
+        // indicate the change in descending order in one single call
+        g_list_model_items_changed (G_LIST_MODEL (model), 0, 0, last);
+
+        /* indicate change in a ascending order */
+        /*for(int i=last - 1; i >= 0; i--)
+        {
+            g_list_model_items_changed (G_LIST_MODEL (model), i, 0, 1);
+        }*/
+
+        //g_ptr_array_remove_range(model->entries, 0, 3);
+
+        //g_print("message: %s\n", gl_journal_entry_get_message(model->entries->pdata[0]));
         model->idle_source = 0;
         g_object_notify_by_pspec (G_OBJECT (model), properties[PROP_LOADING]);
         return G_SOURCE_REMOVE;

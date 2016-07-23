@@ -369,21 +369,6 @@ on_help_button_clicked (GlWindow *window,
     gtk_widget_hide (priv->info_bar);
 }
 
-void
-gl_window_set_sort_order (GlWindow *window,
-                          GlSortOrder sort_order)
-{
-    GlWindowPrivate *priv;
-    GlEventView *event;
-
-    g_return_if_fail (GL_WINDOW (window));
-
-    priv = gl_window_get_instance_private (window);
-    event = GL_EVENT_VIEW (priv->event);
-
-    gl_event_view_set_sort_order (event, sort_order);
-}
-
 static GActionEntry actions[] = {
     { "view-mode", on_action_radio, "s", "'list'", on_view_mode },
     { "toolbar-mode", on_action_radio, "s", "'list'", on_toolbar_mode },
