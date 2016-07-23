@@ -53,6 +53,7 @@ typedef struct
     GtkWidget *search_entry;
     GtkWidget *search_dropdown_button;
     gulong parameter_group;
+    GlQuerySearchType search_type;
     gchar *search_text;
     const gchar *boot_match;
 } GlEventViewListPrivate;
@@ -455,7 +456,8 @@ query_add_category_matches (GlQuery *query,
 static void
 query_add_search_matches (GlQuery *query,
                           const gchar *search_text,
-                          gsize parameter_group)
+                          gsize parameter_group,
+                          GlQuerySearchType search_type)
 {
     switch (parameter_group)
     {
@@ -475,55 +477,55 @@ query_add_search_matches (GlQuery *query,
 
         case GL_PARAMETER_GROUP_PID:
         {
-            gl_query_add_match (query, "_PID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_PID", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_UID:
         {
-            gl_query_add_match (query, "_UID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_UID", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_GID:
         {
-            gl_query_add_match (query, "_GID", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_GID", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_MESSAGE:
         {
-            gl_query_add_match (query, "MESSAGE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "MESSAGE", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_PROCESS_NAME:
         {
-            gl_query_add_match (query, "_COMM", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_COMM", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_SYSTEMD_UNIT:
         {
-            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_SYSTEMD_UNIT", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_KERNEL_DEVICE:
         {
-            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_KERNEL_DEVICE", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_AUDIT_SESSION:
         {
-            gl_query_add_match (query, "_AUDIT_SESSION", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_AUDIT_SESSION", search_text, search_type);
         }
         break;
 
         case GL_PARAMETER_GROUP_EXECUTABLE_PATH:
         {
-            gl_query_add_match (query, "_EXE", search_text, SEARCH_TYPE_SUBSTRING);
+            gl_query_add_match (query, "_EXE", search_text, search_type);
         }
         break;
     }
@@ -545,7 +547,9 @@ create_query_object (GlEventViewList *view)
 
     query_add_category_matches (query, list, priv->boot_match);
 
-    query_add_search_matches (query, priv->search_text, priv->parameter_group);
+    query_add_search_matches (query, priv->search_text, priv->parameter_group, priv->search_type);
+
+    gl_query_set_exact_search (query, priv->search_type);
 
     return query;
 }
@@ -754,6 +758,21 @@ search_popover_parameter_group_changed (GlSearchPopover *popover,
     gl_journal_model_take_query (priv->journal_model, query);
 }
 
+static void
+search_popover_search_type_changed (GlSearchPopover *popover,
+                                    GlQuerySearchType search_type,
+                                    GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv = gl_event_view_list_get_instance_private (view);
+    GlQuery *query;
+
+    priv->search_type = search_type;
+
+    query = create_query_object (view);
+
+    gl_journal_model_take_query (priv->journal_model, query);
+}
+
 /* Get the view elements from ui file and link it with the drop down button */
 static void
 setup_search_popover (GlEventViewList *view)
@@ -773,6 +792,8 @@ setup_search_popover (GlEventViewList *view)
 
     g_signal_connect (search_popover, "parameter-group",
                       G_CALLBACK (search_popover_parameter_group_changed), view);
+    g_signal_connect (search_popover, "search-type",
+                      G_CALLBACK (search_popover_search_type_changed), view);
 
     /* Link the drop down button with search popover */
     gtk_menu_button_set_popover (GTK_MENU_BUTTON (priv->search_dropdown_button),
