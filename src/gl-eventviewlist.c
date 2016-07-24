@@ -54,6 +54,7 @@ typedef struct
     GtkWidget *search_dropdown_button;
     gulong parameter_group;
     GlQuerySearchType search_type;
+    gsize range_group;
     gchar *search_text;
     const gchar *boot_match;
 } GlEventViewListPrivate;
@@ -377,17 +378,9 @@ get_current_boot_id (const gchar *boot_match)
 
 static void
 query_add_category_matches (GlQuery *query,
-                            GlCategoryList *list,
-                            const gchar *boot_match)
+                            GlCategoryList *list)
 {
-    gchar *boot_id;
     GlCategoryListFilter filter;
-
-    /* Get current boot id */
-    boot_id = get_current_boot_id (boot_match);
-
-    /* Add boot match for all the categories */
-    gl_query_add_match (query, "_BOOT_ID", boot_id, SEARCH_TYPE_EXACT);
 
     /* Add exact matches according to selected category */
     filter = gl_category_list_get_category (list);
@@ -449,8 +442,6 @@ query_add_category_matches (GlQuery *query,
         default:
             g_assert_not_reached ();
     }
-
-    g_free (boot_id);
 }
 
 static void
@@ -531,6 +522,103 @@ query_add_search_matches (GlQuery *query,
     }
 }
 
+static void
+query_set_day_timestamps (GlQuery *query,
+                          gint start_day_offset,
+                          gint end_day_offset)
+{
+    GDateTime *now;
+    GDateTime *today_start;
+    GDateTime *today_end;
+    guint64 start_timestamp;
+    guint64 end_timestamp;
+
+    now = g_date_time_new_now_local();
+
+    today_start = g_date_time_new_local (g_date_time_get_year (now),
+                                         g_date_time_get_month (now),
+                                         g_date_time_get_day_of_month (now) - start_day_offset,
+                                         23,
+                                         59,
+                                         59.0);
+
+    start_timestamp = g_date_time_to_unix (today_start) * G_USEC_PER_SEC;
+
+    today_end = g_date_time_new_local (g_date_time_get_year (now),
+                                       g_date_time_get_month (now),
+                                       g_date_time_get_day_of_month (now) - end_day_offset,
+                                       0,
+                                       0,
+                                       0.0);
+
+    end_timestamp = g_date_time_to_unix (today_end) * G_USEC_PER_SEC;
+
+    gl_query_set_journal_range (query, start_timestamp, end_timestamp);
+
+    g_date_time_unref (now);
+    g_date_time_unref (today_start);
+    g_date_time_unref (today_end);
+}
+
+static void
+query_add_journal_range_filter (GlQuery *query,
+                                GlEventViewList *view,
+                                gsize range_group,
+                                const gchar *current_boot_match)
+{
+    /* Add range filters */
+    switch (range_group)
+    {
+        case GL_RANGE_GROUP_CURRENT_BOOT:
+        {
+            /* Get current boot id */
+            gchar *boot_match;
+
+            boot_match = get_current_boot_id (current_boot_match);
+            gl_query_add_match (query, "_BOOT_ID", boot_match, SEARCH_TYPE_EXACT);
+
+            g_free (boot_match);
+        }
+        break;
+
+        case GL_RANGE_GROUP_PREVIOUS_BOOT:
+        {
+            GArray *boot_ids;
+            GlJournalBootID *boot_id;
+
+            boot_ids = gl_event_view_list_get_boot_ids (view);
+
+            boot_id = &g_array_index (boot_ids, GlJournalBootID, boot_ids->len - 2);
+
+            gl_query_set_journal_range (query, boot_id->realtime_last, boot_id->realtime_first);
+        }
+        break;
+
+        case GL_RANGE_GROUP_TODAY:
+        {
+            query_set_day_timestamps (query, 0, 0);
+        }
+        break;
+
+        case GL_RANGE_GROUP_YESTERDAY:
+        {
+            query_set_day_timestamps (query, 1, 1);
+        }
+        break;
+
+        case GL_RANGE_GROUP_LAST_3_DAYS:
+        {
+            query_set_day_timestamps (query, 0, 2);
+        }
+        break;
+
+        default:
+        {
+            /* By default, search the entire journal */
+        }
+    }
+}
+
 /* Create query object according to selected category */
 static GlQuery *
 create_query_object (GlEventViewList *view)
@@ -545,7 +633,10 @@ create_query_object (GlEventViewList *view)
     /* Create new query object */
     query = gl_query_new ();
 
-    query_add_category_matches (query, list, priv->boot_match);
+    /* Set journal timestamp range */
+    query_add_journal_range_filter (query, view, priv->range_group, priv->boot_match);
+
+    query_add_category_matches (query, list);
 
     query_add_search_matches (query, priv->search_text, priv->parameter_group, priv->search_type);
 
@@ -773,6 +864,21 @@ search_popover_search_type_changed (GlSearchPopover *popover,
     gl_journal_model_take_query (priv->journal_model, query);
 }
 
+static void
+search_popover_range_group_changed (GlSearchPopover *popover,
+                                    gint range_group,
+                                    GlEventViewList *view)
+{
+    GlEventViewListPrivate *priv = gl_event_view_list_get_instance_private (view);
+    GlQuery *query;
+
+    priv->range_group = range_group;
+
+    query = create_query_object (view);
+
+    gl_journal_model_take_query (priv->journal_model, query);
+}
+
 /* Get the view elements from ui file and link it with the drop down button */
 static void
 setup_search_popover (GlEventViewList *view)
@@ -794,6 +900,8 @@ setup_search_popover (GlEventViewList *view)
                       G_CALLBACK (search_popover_parameter_group_changed), view);
     g_signal_connect (search_popover, "notify::search-type",
                       G_CALLBACK (search_popover_search_type_changed), view);
+    g_signal_connect (search_popover, "range-group",
+                      G_CALLBACK (search_popover_range_group_changed), view);
 
     /* Link the drop down button with search popover */
     gtk_menu_button_set_popover (GTK_MENU_BUTTON (priv->search_dropdown_button),
