@@ -20,6 +20,16 @@ typedef enum
     GL_PARAMETER_GROUP_EXECUTABLE_PATH
 } GlParameterGroups;
 
+typedef enum
+{
+    GL_RANGE_GROUP_CURRENT_BOOT,
+    GL_RANGE_GROUP_PREVIOUS_BOOT,
+    GL_RANGE_GROUP_TODAY = 3,
+    GL_RANGE_GROUP_YESTERDAY = 4,
+    GL_RANGE_GROUP_LAST_3_DAYS = 5,
+    GL_RANGE_GROUP_ENTIRE_JOURNAL = 7
+} GlRangeGroups;
+
 #define GL_TYPE_SEARCH_POPOVER (gl_search_popover_get_type ())
 G_DECLARE_FINAL_TYPE (GlSearchPopover, gl_search_popover, GL, SEARCH_POPOVER, GtkPopover)
 
