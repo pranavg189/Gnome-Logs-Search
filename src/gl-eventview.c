@@ -122,6 +122,20 @@ gl_event_view_show_detail (GlEventView *view)
     priv->entry = gl_event_view_list_get_detail_entry (events);
 }
 
+void
+gl_event_view_set_detail_entry (GlEventView *view, GlJournalEntry *entry)
+{
+    GlEventViewList *events;
+    GlEventViewPrivate *priv;
+
+    g_return_if_fail (GL_EVENT_VIEW (view));
+
+    priv = gl_event_view_get_instance_private (view);
+    events = GL_EVENT_VIEW_LIST (priv->events);
+
+    gl_event_view_list_set_detail_entry (events, entry);
+}
+
 gboolean
 gl_event_view_handle_search_event (GlEventView *view,
                                    GAction *action,
@@ -140,6 +154,21 @@ gl_event_view_handle_search_event (GlEventView *view,
     }
 
     return GDK_EVENT_PROPAGATE;
+}
+
+void
+gl_event_view_search (GlEventView *view,
+                      const gchar *text)
+{
+    GlEventViewPrivate *priv;
+    GlEventViewList *events;
+
+    g_return_if_fail (GL_EVENT_VIEW (view));
+
+    priv = gl_event_view_get_instance_private (view);
+    events = GL_EVENT_VIEW_LIST (priv->events);
+
+    gl_event_view_list_search (events, text);
 }
 
 void
@@ -205,6 +234,7 @@ on_notify_mode (GlEventView *view,
                 gl_event_view_show_detail (view);
                 detail = gl_event_view_detail_new (priv->entry,
                                                    priv->clock_format);
+                g_print("event view entry message: %s\n", gl_journal_entry_get_message(priv->entry));
                 gtk_widget_show_all (detail);
                 gtk_stack_add_named (stack, detail, "detail");
                 gtk_stack_set_visible_child_name (stack, "detail");

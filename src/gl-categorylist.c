@@ -146,6 +146,18 @@ on_gl_category_list_row_selected (GlCategoryList *listbox,
     g_type_class_unref (eclass);
 }
 
+void
+gl_category_list_select_category_filter_all (GlCategoryList *list)
+{
+    GlCategoryListPrivate *priv;
+    GtkListBoxRow *all;
+
+    priv = gl_category_list_get_instance_private (list);
+    all = GTK_LIST_BOX_ROW (priv->all);
+
+    gtk_list_box_select_row (GTK_LIST_BOX(list), all);
+}
+
 GlCategoryListFilter
 gl_category_list_get_category (GlCategoryList *list)
 {

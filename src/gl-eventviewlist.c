@@ -198,6 +198,16 @@ gl_event_view_list_get_detail_entry (GlEventViewList *view)
     return priv->entry;
 }
 
+void
+gl_event_view_list_set_detail_entry (GlEventViewList *view, GlJournalEntry *entry)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    priv->entry = entry;
+}
+
 gchar *
 gl_event_view_list_get_current_boot_time (GlEventViewList *view,
                                           const gchar *boot_match)
@@ -1002,7 +1012,7 @@ gl_event_view_list_init (GlEventViewList *view)
 
 void
 gl_event_view_list_search (GlEventViewList *view,
-                           const gchar *needle)
+                           const gchar *text)
 {
     GlEventViewListPrivate *priv;
 
@@ -1010,13 +1020,11 @@ gl_event_view_list_search (GlEventViewList *view,
 
     priv = gl_event_view_list_get_instance_private (view);
 
-    g_free (priv->search_text);
-    priv->search_text = g_strdup (needle);
+    /* Set text on search entry */
+    gtk_entry_set_text (GTK_ENTRY (priv->search_entry), text);
 
-    /* for search, we need all entries - tell the model to fetch them */
-    gl_journal_model_fetch_more_entries (priv->journal_model, TRUE);
-
-    gtk_list_box_invalidate_filter (priv->entries_box);
+    /* Select "All" category filter */
+    gl_category_list_select_category_filter_all (GL_CATEGORY_LIST (priv->categories));
 }
 
 GtkWidget *

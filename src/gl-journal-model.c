@@ -133,7 +133,11 @@ gl_journal_model_get_property (GObject    *object,
     }
 }
 
-
+GPtrArray *
+gl_journal_model_get_hits (GlJournalModel *model)
+{
+    return model->entries;
+}
 
 static void
 gl_journal_model_stop_idle (GlJournalModel *model)

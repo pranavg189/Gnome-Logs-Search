@@ -8,8 +8,22 @@ SUBDIRS = help po
 
 bin_PROGRAMS = gnome-logs
 
+dbus_shell_search_provider_built_sources =		\
+	gl-search-provider-generated.c \
+	gl-search-provider-generated.h
+
+$(dbus_shell_search_provider_built_sources) : Makefile.am $(top_srcdir)/data/shell-search-provider-dbus-interfaces.xml
+		gdbus-codegen \
+		--interface-prefix org.gnome. \
+		--c-namespace Logs \
+		--generate-c-code gl-search-provider-generated \
+		$(top_srcdir)/data/shell-search-provider-dbus-interfaces.xml \
+		$(NULL)
+
 BUILT_SOURCES = \
-	$(nodist_gnome_logs_SOURCES)
+	$(nodist_gnome_logs_SOURCES) \
+	$(dbus_shell_search_provider_built_sources) \
+	$(NULL)
 
 gnome_logs_CPPFLAGS = \
 	-DLOCALEDIR=\""$(localedir)"\" \
@@ -31,6 +45,8 @@ gnome_logs_SOURCES = \
 	src/gl-eventviewdetail.c \
 	src/gl-eventviewlist.c \
 	src/gl-search-popover.c \
+	src/gl-search-provider.c \
+	src/gl-search-provider-generated.c \
 	src/gl-eventviewrow.c \
 	src/gl-journal.c \
 	src/gl-journal-model.c \
@@ -61,6 +77,8 @@ noinst_gnome_logs_headers = \
 	src/gl-eventviewdetail.h \
 	src/gl-eventviewlist.h \
 	src/gl-search-popover.h \
+	src/gl-search-provider.h \
+	src/gl-search-provider-generated.h \
 	src/gl-eventviewrow.h \
 	src/gl-journal.h \
 	src/gl-journal-model.h \
@@ -229,6 +247,7 @@ dist_noinst_DATA = \
 	$(service_in_files) \
 	$(gsettings_SCHEMAS) \
 	data/org.gnome.Logs.gresource.xml \
+	data/shell-search-provider-dbus-interfaces.xml \
 	data/gnome-logs.xml \
 	data/icons/gnome-logs.svg
 

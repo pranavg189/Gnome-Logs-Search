@@ -71,4 +71,6 @@ gchar *                 gl_journal_model_get_current_boot_time          (GlJourn
 void                    gl_query_set_exact_search                       (GlQuery *query,
                                                                          GlQuerySearchType search_type);
 
+GPtrArray *             gl_journal_model_get_hits                       (GlJournalModel *model);
+
 #endif
