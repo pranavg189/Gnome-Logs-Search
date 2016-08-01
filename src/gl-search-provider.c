@@ -154,11 +154,15 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
     GlSearchProvider *search_provider = user_data;
     const gchar *message;
     const gchar *process_name;
+    GIcon *result_icon;
 
     GHashTable *metas_cache;
 
     metas_cache = g_hash_table_new_full (g_str_hash, g_str_equal,
                                          g_free, (GDestroyNotify) g_variant_unref);
+
+    /* load the icon */
+    result_icon = g_themed_icon_new_with_default_fallbacks ("text-x-generic");
 
     // Build the result metas
     GVariantBuilder meta;
@@ -185,6 +189,9 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
 
         g_variant_builder_add (&meta, "{sv}",
                            "description", g_variant_new_string (process_name));
+
+        g_variant_builder_add (&meta, "{sv}",
+                           "icon", g_icon_serialize(result_icon));
 
         meta_variant = g_variant_builder_end (&meta);
 
