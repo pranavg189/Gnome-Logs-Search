@@ -32,24 +32,24 @@ search_finished (GlJournalModel *model,
 {
     GlSearchProvider *search_provider = user_data;
 
-    g_print("loading: %s\n", gl_journal_model_get_loading(model) ? "TRUE" : "FALSE");
+    //g_print("loading: %s\n", gl_journal_model_get_loading(model) ? "TRUE" : "FALSE");
 
-    g_return_if_fail (GL_IS_JOURNAL_MODEL (search_provider->model));
+    g_return_if_fail (GL_IS_JOURNAL_MODEL (model));
 
-    search_provider->hits = gl_journal_model_get_hits (search_provider->model);
+    search_provider->hits = gl_journal_model_get_hits (model);
 
     GVariantBuilder builder;
     GlJournalEntry *entry;
 
     g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
 
-    g_print("hits len: %d\n", search_provider->hits->len);
+    //g_print("hits len: %d\n", search_provider->hits->len);
 
     for(int i = 0; i < search_provider->hits->len; i++)
     {
         entry = g_ptr_array_index (search_provider->hits, i);
         g_variant_builder_add (&builder, "s", gl_journal_entry_get_message(entry));
-        g_print("hit added: %s\n", gl_journal_entry_get_message(entry));
+        //g_print("hit added: %s\n", gl_journal_entry_get_message(entry));
     }
 
     g_dbus_method_invocation_return_value (search_provider->invocation, g_variant_new ("(as)", &builder));
@@ -74,22 +74,24 @@ execute_search (GlSearchProvider *search_provider,
         return;
     }*/
 
-    // Clear the earlier searches
-    if (search_provider->model != NULL)
+    /* Clear the earlier searches */
+    if (GL_IS_JOURNAL_MODEL (search_provider->model))
     {
         g_print("search provider is not null\n");
         g_clear_object (&search_provider->model);
     }
 
+
+
     /* would have to view what is stored in this */
     search_text = g_strjoinv (" ", terms);
 
-    g_print("search_text: %s\n", *terms);
+    //g_print("search_text: %s\n", *terms);
 
     /* Create a new object for journal-model */
     search_provider->model = gl_journal_model_new();
 
-    search_provider->invocation = g_object_ref(invocation);
+    search_provider->invocation = g_object_ref (invocation);
 
     /* create a new object for query */
     query = gl_query_new ();
@@ -114,7 +116,7 @@ execute_search (GlSearchProvider *search_provider,
     g_application_hold (g_application_get_default ());
 
     /* start searching */
-    g_print ("*** Search engine search started\n");
+    //g_print ("*** Search engine search started\n");
 }
 
 static gboolean
@@ -125,7 +127,7 @@ handle_get_initial_result_set (LogsShellSearchProvider2 *skeleton,
 {
   GlSearchProvider *search_provider = user_data;
 
-  g_print ("****** GetInitialResultSet\n");
+  //g_print ("****** GetInitialResultSet\n");
   execute_search (search_provider, invocation, terms);
   return TRUE;
 }
@@ -139,7 +141,7 @@ handle_get_subsearch_result_set (LogsShellSearchProvider2  *skeleton,
 {
   GlSearchProvider *search_provider = user_data;
 
-  g_print ("****** GetSubSearchResultSet\n");
+  //g_print ("****** GetSubSearchResultSet\n");
   execute_search (search_provider, invocation, terms);
   return TRUE;
 }
@@ -150,7 +152,7 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
                          gchar                        **results,
                          gpointer                       user_data)
 {
-    g_print("****** GetResultMetas\n");
+    //g_print("****** GetResultMetas\n");
     GlSearchProvider *search_provider = user_data;
     const gchar *message;
     const gchar *process_name;
@@ -211,7 +213,7 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
         meta_data = g_hash_table_lookup (metas_cache,
                                     results[idx]);
         g_variant_builder_add_value (&builder, meta_data);
-        g_print("result %d: %s\n", idx, results[idx]);
+        //g_print("result %d: %s\n", idx, results[idx]);
     }
 
     g_dbus_method_invocation_return_value (invocation,
@@ -219,7 +221,7 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
 
     g_hash_table_destroy (metas_cache);
 
-    g_print("**********************\n");
+    //g_print("**********************\n");
 
     return TRUE;
 }
@@ -237,14 +239,14 @@ handle_activate_result (LogsShellSearchProvider2 *skeleton,
     GlJournalEntry *entry;
 
   // Get the GlJournalEntry object for the selected result
-    g_print("selected result from search provider is: %s\n", result);
+    //g_print("selected result from search provider is: %s\n", result);
 
     entry = g_ptr_array_index (search_provider->hits, atoi(result));
 
-    g_print("journal entry message: %s", gl_journal_entry_get_message(entry));
+    //g_print("journal entry message: %s", gl_journal_entry_get_message(entry));
 
     for(int i=0; terms[i] != NULL;i++)
-        g_print("term %d: %s\n", i, terms[i]);
+        //g_print("term %d: %s\n", i, terms[i]);
 
     gl_application_open_detail_entry (app, entry);
 
@@ -292,7 +294,7 @@ gl_search_provider_init (GlSearchProvider *self)
 
     self->skeleton = logs_shell_search_provider2_skeleton_new ();
 
-    g_print("Search provider started\n");
+    //g_print("Search provider started\n");
 
 
     g_signal_connect_swapped (self->skeleton,
