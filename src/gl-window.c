@@ -370,6 +370,26 @@ on_help_button_clicked (GlWindow *window,
 }
 
 void
+gl_window_open_detail_entry (GlWindow *window,
+                             GlJournalEntry *entry)
+{
+    GlWindowPrivate *priv;
+    GlEventView *view;
+    GAction *view_mode;
+
+    priv = gl_window_get_instance_private (window);
+    view = GL_EVENT_VIEW (priv->event);
+
+    /* Set the entry selected from the search provider results */
+    gl_event_view_set_detail_entry (view, entry);
+
+    view_mode = g_action_map_lookup_action (G_ACTION_MAP (window),
+                                            "view-mode");
+    /* Switch to detail view */
+    g_action_change_state (view_mode, g_variant_new_string ("detail"));
+}
+
+void
 gl_window_set_sort_order (GlWindow *window,
                           GlSortOrder sort_order)
 {

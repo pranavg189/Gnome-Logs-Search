@@ -122,6 +122,20 @@ gl_event_view_show_detail (GlEventView *view)
     priv->entry = gl_event_view_list_get_detail_entry (events);
 }
 
+void
+gl_event_view_set_detail_entry (GlEventView *view, GlJournalEntry *entry)
+{
+    GlEventViewList *events;
+    GlEventViewPrivate *priv;
+
+    g_return_if_fail (GL_EVENT_VIEW (view));
+
+    priv = gl_event_view_get_instance_private (view);
+    events = GL_EVENT_VIEW_LIST (priv->events);
+
+    gl_event_view_list_set_detail_entry (events, entry);
+}
+
 gboolean
 gl_event_view_handle_search_event (GlEventView *view,
                                    GAction *action,

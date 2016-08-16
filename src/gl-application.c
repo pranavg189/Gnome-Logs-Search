@@ -50,6 +50,18 @@ static const gchar SETTINGS_SCHEMA[] = "org.gnome.Logs";
 static const gchar DESKTOP_MONOSPACE_FONT_NAME[] = "monospace-font-name";
 static const gchar SORT_ORDER[] = "sort-order";
 
+void
+gl_application_open_detail_entry (GApplication *self,
+                                  GlJournalEntry *entry)
+{
+    GtkWidget *window;
+
+    window = gl_window_new (GTK_APPLICATION (self));
+    gtk_widget_show (window);
+
+    gl_window_open_detail_entry (GL_WINDOW (window), entry);
+}
+
 static void
 on_new_window (GSimpleAction *action,
                GVariant *parameter,

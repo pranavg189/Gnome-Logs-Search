@@ -32,6 +32,7 @@ G_DECLARE_FINAL_TYPE (GlEventViewList, gl_event_view_list, GL, EVENT_VIEW_LIST, 
 GtkWidget * gl_event_view_list_new (void);
 void gl_event_view_list_search (GlEventViewList *view, const gchar *needle);
 GlJournalEntry *gl_event_view_list_get_detail_entry (GlEventViewList *view);
+void gl_event_view_list_set_detail_entry (GlEventViewList *view, GlJournalEntry *entry);
 gboolean gl_event_view_list_handle_search_event (GlEventViewList *view,
                                                  GAction *action,
                                                  GdkEvent *event);

@@ -20,6 +20,7 @@
 #define GL_APPLICATION_H_
 
 #include <gtk/gtk.h>
+#include "gl-journal.h"
 
 G_BEGIN_DECLS
 
@@ -34,6 +35,7 @@ typedef enum
 G_DECLARE_FINAL_TYPE (GlApplication, gl_application, GL, APPLICATION, GtkApplication)
 
 GtkApplication * gl_application_new (void);
+void gl_application_open_detail_entry (GApplication *self, GlJournalEntry *entry);
 
 G_END_DECLS
 

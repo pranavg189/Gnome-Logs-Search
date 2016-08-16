@@ -16,6 +16,9 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdlib.h>
+
+#include "gl-application.h"
 #include "gl-journal-model.h"
 #include "gl-journal.h"
 #include "gl-search-provider-generated.h"
@@ -211,6 +214,29 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
     return TRUE;
 }
 
+static gboolean
+handle_activate_result (LogsShellSearchProvider2 *skeleton,
+                        GDBusMethodInvocation *invocation,
+                        gchar *result,
+                        gchar **terms,
+                        guint32 timestamp,
+                        gpointer user_data)
+{
+    GlSearchProvider *search_provider = user_data;
+    GApplication *app;
+    GlJournalEntry *entry;
+
+    app = g_application_get_default ();
+
+    entry = g_ptr_array_index (search_provider->hits, atoi (result));
+
+    gl_application_open_detail_entry (app, entry);
+
+    logs_shell_search_provider2_complete_activate_result (skeleton, invocation);
+
+    return TRUE;
+}
+
 static void
 search_provider_dispose (GObject *obj)
 {
@@ -245,6 +271,10 @@ gl_search_provider_init (GlSearchProvider *self)
     g_signal_connect_swapped (self->skeleton,
                               "handle-get-result-metas",
                               G_CALLBACK (handle_get_result_metas),
+                              self);
+    g_signal_connect_swapped (self->skeleton,
+                              "handle-activate-result",
+                              G_CALLBACK (handle_activate_result),
                               self);
 }
 

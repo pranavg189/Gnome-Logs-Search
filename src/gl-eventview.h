@@ -45,6 +45,7 @@ G_DECLARE_FINAL_TYPE (GlEventView, gl_event_view, GL, EVENT_VIEW, GtkStack)
 GtkWidget * gl_event_view_new (void);
 void gl_event_view_search (GlEventView *view, const gchar *needle);
 void gl_event_view_set_mode (GlEventView *view, GlEventViewMode mode);
+void gl_event_view_set_detail_entry (GlEventView *view, GlJournalEntry *entry);
 void gl_event_view_show_detail (GlEventView *view);
 gboolean gl_event_view_handle_search_event (GlEventView *view, GAction *action, GdkEvent *event);
 void gl_event_view_set_search_mode (GlEventView *view, gboolean state);

@@ -199,6 +199,16 @@ gl_event_view_list_get_detail_entry (GlEventViewList *view)
     return priv->entry;
 }
 
+void
+gl_event_view_list_set_detail_entry (GlEventViewList *view, GlJournalEntry *entry)
+{
+    GlEventViewListPrivate *priv;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    priv->entry = entry;
+}
+
 gchar *
 gl_event_view_list_get_current_boot_time (GlEventViewList *view,
                                           const gchar *boot_match)
