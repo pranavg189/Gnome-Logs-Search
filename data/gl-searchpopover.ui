@@ -1132,15 +1132,13 @@
             </row>
             <row>
                 <col id="0" translatable="yes">Separator</col>
-                <col id="1">8</col>
-                <col id="2">True</col>
-                <col id="3">Separator</col>
+                <col id="1">True</col>
+                <col id="2">Separator</col>
             </row>
             <row>
                 <col id="0" translatable="yes">Set Custom Range…</col>
-                <col id="1">9</col>
-                <col id="2">False</col>
-                <col id="3">GL_SEARCH_POPOVER_JOURNAL_TIMESTAMP_RANGE_CUSTOM</col>
+                <col id="1">False</col>
+                <col id="2">GL_SEARCH_POPOVER_JOURNAL_TIMESTAMP_RANGE_CUSTOM</col>
             </row>
         </data>
     </object>
