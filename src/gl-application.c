@@ -51,6 +51,18 @@ static const gchar DESKTOP_MONOSPACE_FONT_NAME[] = "monospace-font-name";
 static const gchar SORT_ORDER[] = "sort-order";
 
 void
+gl_application_search (GApplication *self,
+                       const gchar *text)
+{
+    GtkWidget *window;
+
+    window = gl_window_new (GTK_APPLICATION (self));
+    gtk_widget_show (window);
+
+    gl_window_search (GL_WINDOW (window), text);
+}
+
+void
 gl_application_open_detail_entry (GApplication *self,
                                   GlJournalEntry *entry)
 {

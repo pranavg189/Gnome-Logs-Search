@@ -237,6 +237,29 @@ handle_activate_result (LogsShellSearchProvider2 *skeleton,
     return TRUE;
 }
 
+static gboolean
+handle_launch_search (LogsShellSearchProvider2 *skeleton,
+                      GDBusMethodInvocation *invocation,
+                      gchar **terms,
+                      guint32 timestamp,
+                      gpointer user_data)
+{
+  GApplication *app;
+  gchar *string;
+
+  string = g_strjoinv (" ", terms);
+
+  app = g_application_get_default ();
+
+  gl_application_search (app, string);
+
+  g_free (string);
+
+  logs_shell_search_provider2_complete_launch_search (skeleton, invocation);
+
+  return TRUE;
+}
+
 static void
 search_provider_dispose (GObject *obj)
 {
@@ -275,6 +298,10 @@ gl_search_provider_init (GlSearchProvider *self)
     g_signal_connect_swapped (self->skeleton,
                               "handle-activate-result",
                               G_CALLBACK (handle_activate_result),
+                              self);
+    g_signal_connect_swapped (self->skeleton,
+                              "handle-launch-search",
+                              G_CALLBACK (handle_launch_search),
                               self);
 }
 

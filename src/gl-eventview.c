@@ -157,6 +157,21 @@ gl_event_view_handle_search_event (GlEventView *view,
 }
 
 void
+gl_event_view_search (GlEventView *view,
+                      const gchar *text)
+{
+    GlEventViewPrivate *priv;
+    GlEventViewList *events;
+
+    g_return_if_fail (GL_EVENT_VIEW (view));
+
+    priv = gl_event_view_get_instance_private (view);
+    events = GL_EVENT_VIEW_LIST (priv->events);
+
+    gl_event_view_list_search (events, text);
+}
+
+void
 gl_event_view_set_search_mode (GlEventView *view,
                                gboolean state)
 {

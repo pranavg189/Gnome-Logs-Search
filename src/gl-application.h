@@ -36,6 +36,7 @@ G_DECLARE_FINAL_TYPE (GlApplication, gl_application, GL, APPLICATION, GtkApplica
 
 GtkApplication * gl_application_new (void);
 void gl_application_open_detail_entry (GApplication *self, GlJournalEntry *entry);
+void gl_application_search (GApplication *self, const gchar *text);
 
 G_END_DECLS
 
