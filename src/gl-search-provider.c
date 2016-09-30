@@ -41,6 +41,12 @@ search_finished (GlJournalModel *model,
     GVariantBuilder builder;
     GlJournalEntry *entry;
 
+    if(search_provider->hits->len == 0)
+    {
+        g_print("query is null\n");
+        return;
+    }
+
     g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
 
     //g_print("hits len: %d\n", search_provider->hits->len);
@@ -74,14 +80,6 @@ execute_search (GlSearchProvider *search_provider,
         return;
     }*/
 
-    /* Clear the earlier searches */
-    if (GL_IS_JOURNAL_MODEL (search_provider->model))
-    {
-        g_print("search provider is not null\n");
-        g_clear_object (&search_provider->model);
-    }
-
-
 
     /* would have to view what is stored in this */
     search_text = g_strjoinv (" ", terms);
@@ -89,7 +87,7 @@ execute_search (GlSearchProvider *search_provider,
     //g_print("search_text: %s\n", *terms);
 
     /* Create a new object for journal-model */
-    search_provider->model = gl_journal_model_new();
+
 
     search_provider->invocation = g_object_ref (invocation);
 
@@ -109,9 +107,6 @@ execute_search (GlSearchProvider *search_provider,
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (search_provider->model, query);
-
-    g_signal_connect (search_provider->model, "notify::loading",
-                      G_CALLBACK (search_finished), search_provider);
 
     g_application_hold (g_application_get_default ());
 
@@ -317,6 +312,12 @@ gl_search_provider_init (GlSearchProvider *self)
                               "handle-launch-search",
                               G_CALLBACK (handle_launch_search),
                               self);
+
+     self->model = gl_journal_model_new();
+
+     g_signal_connect (self->model, "notify::loading",
+                      G_CALLBACK (search_finished), self);
+
 }
 
 gboolean
