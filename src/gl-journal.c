@@ -639,6 +639,7 @@ gl_journal_set_start_position (GlJournal *journal,
         {
             g_warning ("Error seeking to given timestamp %" G_GUINT64_FORMAT ": %s", start_timestamp, g_strerror (-r));
         }
+
     }
     else
     {
@@ -669,6 +670,29 @@ gl_journal_previous (GlJournal *journal)
     /* filter this one out because of a non-existent field */
     if (!gl_journal_query_match (priv->journal, (const gchar * const *) priv->mandatory_fields))
         return gl_journal_previous (journal);
+
+    return _gl_journal_query_entry (journal);
+}
+
+GlJournalEntry *
+gl_journal_next (GlJournal *journal)
+{
+    GlJournalPrivate *priv = gl_journal_get_instance_private (journal);
+    gint r;
+
+    r = sd_journal_next (priv->journal);
+    if (r < 0)
+    {
+        g_warning ("Failed to fetch next log entry: %s", g_strerror (-r));
+        return NULL;
+    }
+
+    if (r == 0) /* end */
+        return NULL;
+
+    /* filter this one out because of a non-existent field */
+    if (!gl_journal_query_match (priv->journal, (const gchar * const *) priv->mandatory_fields))
+        return gl_journal_next (journal);
 
     return _gl_journal_query_entry (journal);
 }

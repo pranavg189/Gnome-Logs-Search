@@ -366,19 +366,6 @@ get_uid_match_field_value (void)
     return str;
 }
 
-/* Get Boot ID for current boot match */
-static gchar *
-get_current_boot_id (const gchar *boot_match)
-{
-    g_return_val_if_fail (boot_match != NULL, NULL);
-
-    gchar *boot_value;
-
-    boot_value = strchr (boot_match, '=') + 1;
-
-    return g_strdup (boot_value);
-}
-
 static void
 query_add_category_matches (GlQuery *query,
                             GlCategoryList *list)
@@ -546,20 +533,14 @@ query_add_journal_range_filter (GlQuery *query,
     {
         case GL_SEARCH_POPOVER_JOURNAL_TIMESTAMP_RANGE_CURRENT_BOOT:
         {
-            /* Get current boot id */
-            gchar *boot_match = NULL;
+            GArray *boot_ids;
+            GlJournalBootID *boot_id;
 
-            /* Don't add match when priv->boot_match equals NULL. This
-             * happens when users don't have permissions to view both
-             * system and user logs. */
-            if (priv->boot_match != NULL)
-            {
-                boot_match = get_current_boot_id (priv->boot_match);
-                gl_query_add_match (query, "_BOOT_ID", boot_match,
-                                    GL_QUERY_SEARCH_TYPE_EXACT);
-            }
+            boot_ids = gl_event_view_list_get_boot_ids (view);
 
-            g_free (boot_match);
+            boot_id = &g_array_index (boot_ids, GlJournalBootID, boot_ids->len - 1);
+
+            gl_query_set_journal_timestamp_range (query, boot_id->realtime_last, boot_id->realtime_first);
         }
             break;
         case GL_SEARCH_POPOVER_JOURNAL_TIMESTAMP_RANGE_PREVIOUS_BOOT:
@@ -617,9 +598,15 @@ create_query_object (GlEventViewList *view)
     GlEventViewListPrivate *priv;
     GlQuery *query;
     GlCategoryList *list;
+    GSettings *settings;
+    gint sort_order;
 
     priv = gl_event_view_list_get_instance_private (view);
     list = GL_CATEGORY_LIST (priv->categories);
+
+    /* Get the timestamp sorting order from GSettings schema */
+    settings = g_settings_new (SETTINGS_SCHEMA);
+    sort_order = g_settings_get_enum (settings, SORT_ORDER);
 
     /* Create new query object */
     query = gl_query_new ();
@@ -633,6 +620,17 @@ create_query_object (GlEventViewList *view)
 
     gl_query_set_search_type (query, priv->search_type);
 
+    if (sort_order == GL_SORT_ORDER_ASCENDING_TIME)
+    {
+        gl_query_set_journal_model_order (query, GL_QUERY_JOURNAL_MODEL_ORDER_ASCENDING);
+    }
+    else
+    {
+        gl_query_set_journal_model_order (query, GL_QUERY_JOURNAL_MODEL_ORDER_DESCENDING);
+    }
+
+    g_object_unref (settings);
+
     return query;
 }
 
@@ -643,8 +641,7 @@ on_notify_category (GlCategoryList *list,
 {
     GlEventViewList *view;
     GlEventViewListPrivate *priv;
-    GSettings *settings;
-    gint sort_order;
+
     GlQuery *query;
 
     view = GL_EVENT_VIEW_LIST (user_data);
@@ -655,11 +652,6 @@ on_notify_category (GlCategoryList *list,
 
     /* Set the created query on the journal model */
     gl_journal_model_take_query (priv->journal_model, query);
-
-    settings = g_settings_new (SETTINGS_SCHEMA);
-    sort_order = g_settings_get_enum (settings, SORT_ORDER);
-    g_object_unref (settings);
-    gl_event_view_list_set_sort_order (view, sort_order);
 }
 
 void

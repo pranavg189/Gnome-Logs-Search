@@ -48,6 +48,7 @@ static void gl_journal_model_interface_init (GListModelInterface *iface);
 static GPtrArray *tokenize_search_string (gchar *search_text);
 static gboolean search_in_entry (GlJournalEntry *entry, GlJournalModel *model);
 static gboolean gl_query_check_journal_end (GlQuery *query, GlJournalEntry *entry);
+static gboolean gl_query_check_journal_start (GlQuery *query, GlJournalEntry *entry);
 
 G_DEFINE_TYPE_WITH_CODE (GlJournalModel, gl_journal_model, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_LIST_MODEL, gl_journal_model_interface_init))
@@ -79,13 +80,29 @@ gl_journal_model_fetch_idle (gpointer user_data)
     g_assert (model->n_entries_to_fetch > 0);
 
     last = model->entries->len;
-    if ((entry = gl_journal_previous (model->journal)) && gl_query_check_journal_end (model->query, entry))
+
+    if (model->query->order == GL_QUERY_JOURNAL_MODEL_ORDER_ASCENDING)
     {
-        if (search_in_entry (entry, model))
+        if ((entry = gl_journal_next (model->journal)) && gl_query_check_journal_start (model->query, entry))
         {
-            model->n_entries_to_fetch--;
-            g_ptr_array_add (model->entries, entry);
-            g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+            if (search_in_entry (entry, model))
+            {
+                model->n_entries_to_fetch--;
+                g_ptr_array_add (model->entries, entry);
+                g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+            }
+        }
+    }
+    else if (model->query->order == GL_QUERY_JOURNAL_MODEL_ORDER_DESCENDING)
+    {
+        if ((entry = gl_journal_previous (model->journal)) && gl_query_check_journal_end (model->query, entry))
+        {
+            if (search_in_entry (entry, model))
+            {
+                model->n_entries_to_fetch--;
+                g_ptr_array_add (model->entries, entry);
+                g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+            }
         }
     }
     else
@@ -253,6 +270,7 @@ gl_query_new (void)
 
     query->queryitems = g_ptr_array_new_with_free_func ((GDestroyNotify) gl_query_item_free);
     query->search_type = GL_QUERY_SEARCH_TYPE_SUBSTRING;
+    query->order = GL_QUERY_JOURNAL_MODEL_ORDER_DESCENDING;
     query->start_timestamp = 0;
     query->end_timestamp = 0;
 
@@ -279,6 +297,12 @@ void
 gl_query_set_search_type (GlQuery *query, GlQuerySearchType search_type)
 {
     query->search_type = search_type;
+}
+
+void
+gl_query_set_journal_model_order (GlQuery *query, GlQueryJournalModelOrder order)
+{
+    query->order = order;
 }
 
 static gchar *
@@ -373,7 +397,14 @@ gl_journal_model_process_query (GlJournalModel *model)
 
     gl_journal_set_matches (model->journal, category_matches);
 
-    gl_journal_set_start_position (model->journal, model->query->start_timestamp);
+    if (model->query->order == GL_QUERY_JOURNAL_MODEL_ORDER_ASCENDING)
+    {
+        gl_journal_set_start_position (model->journal, model->query->end_timestamp);
+    }
+    else
+    {
+        gl_journal_set_start_position (model->journal, model->query->start_timestamp);
+    }
 
     /* Start re-population of the journal */
     gl_journal_model_fetch_more_entries (model, FALSE);
@@ -479,6 +510,29 @@ static gboolean
 gl_query_check_journal_end (GlQuery *query, GlJournalEntry *entry)
 {
     return gl_journal_entry_check_journal_end (entry, query->end_timestamp);
+}
+
+/* Check if current entry timestamp is less than the end timestamp */
+static gboolean
+gl_journal_entry_check_journal_start (GlJournalEntry *entry,
+                                      guint64 start_timestamp)
+{
+    guint64 entry_timestamp = gl_journal_entry_get_timestamp (entry);
+
+    if (start_timestamp)
+    {
+        /* Check if we have reached the head of given journal range */
+        if (start_timestamp <= entry_timestamp)
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+gl_query_check_journal_start (GlQuery *query, GlJournalEntry *entry)
+{
+    return gl_journal_entry_check_journal_start (entry, query->start_timestamp);
 }
 
 void

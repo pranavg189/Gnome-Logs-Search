@@ -27,11 +27,18 @@ typedef enum
     GL_QUERY_SEARCH_TYPE_EXACT
 } GlQuerySearchType;
 
+typedef enum
+{
+    GL_QUERY_JOURNAL_MODEL_ORDER_DESCENDING,
+    GL_QUERY_JOURNAL_MODEL_ORDER_ASCENDING
+} GlQueryJournalModelOrder;
+
 /* Resultant query passed to journal model from eventviewlist */
 typedef struct GlQuery
 {
     GPtrArray *queryitems;   /* array of GlQueryItem structs */
     GlQuerySearchType search_type;    /* indicates if search field is passed as exact match */
+    GlQueryJournalModelOrder order; /* whether to iterate through journal in ascending or descending timestamp order */
     guint64 start_timestamp;
     guint64 end_timestamp;
 } GlQuery;
@@ -70,5 +77,8 @@ gchar *                 gl_journal_model_get_boot_time                  (GlJourn
 
 void                    gl_query_set_search_type                        (GlQuery *query,
                                                                          GlQuerySearchType search_type);
+
+void                    gl_query_set_journal_model_order                (GlQuery *query,
+                                                                         GlQueryJournalModelOrder order);
 
 #endif
