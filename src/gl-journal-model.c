@@ -48,6 +48,8 @@ static void gl_journal_model_interface_init (GListModelInterface *iface);
 static GPtrArray *tokenize_search_string (gchar *search_text);
 static gboolean search_in_entry (GlJournalEntry *entry, GlJournalModel *model);
 static gboolean gl_query_check_journal_end (GlQuery *query, GlJournalEntry *entry);
+static gboolean gl_journal_entry_check_message_similarity (GlJournalEntry *current_entry,
+                                                           GlJournalEntry *prev_entry);
 
 G_DEFINE_TYPE_WITH_CODE (GlJournalModel, gl_journal_model, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_LIST_MODEL, gl_journal_model_interface_init))
@@ -69,6 +71,11 @@ typedef enum
 
 static GParamSpec *properties[N_PROPERTIES];
 
+/* for now global variables, later may be moved into GlJournalModel struct */
+guint c_entries = 0; /* Counter for keeping track of entries to be compressed */
+guint64 header_timestamp = 0;
+
+/* Function responsible for populating the model array */
 static gboolean
 gl_journal_model_fetch_idle (gpointer user_data)
 {
@@ -83,23 +90,165 @@ gl_journal_model_fetch_idle (gpointer user_data)
     {
         if (search_in_entry (entry, model))
         {
-            model->n_entries_to_fetch--;
+
+            /* Compare if the current entry and previous entry have similar message */
+            if (last > 0)
+            {
+                GlJournalEntry *prev_entry = g_ptr_array_index (model->entries, last-1);
+
+                /* To change similarity criteria, just change this if condition */
+                if (gl_journal_entry_check_message_similarity (entry,
+                                                               prev_entry) == TRUE)
+                // if (g_strcmp0 (gl_journal_entry_get_message(entry),
+                //                gl_journal_entry_get_message(prev_entry)) == 0)
+                {
+                    /* if messages are identical */
+                    if (gl_journal_entry_get_compressed (prev_entry) == TRUE)
+                    {
+                        /* if previously similar messages were detected */
+                        c_entries++;
+                        gl_journal_entry_set_compressed (entry, TRUE);
+                    }
+                    else
+                    {
+                        /* first time similar messages are being detected */
+                        c_entries = c_entries + 2;
+
+                        // change of this does not get reflected in the GtkEventViewList
+                        // try removing and adding it again and reflecting the change
+                        gl_journal_entry_set_compressed (prev_entry, TRUE);
+                        g_list_model_items_changed (G_LIST_MODEL (model), last - 1, 1, 1);
+
+                        gl_journal_entry_set_compressed (entry, TRUE);
+
+                        /* special handling for descending order */
+                        header_timestamp = gl_journal_entry_get_timestamp (prev_entry);
+                    }
+                }
+                else
+                {
+                /* Add a dummy entry row to function as compressed row header */
+
+                /* if messages not identical and n_centries is greater than or equal to 2 */
+                //g_print("c_entries: %d\n", c_entries);
+                    if (c_entries >= 2)
+                    {
+                        //gl_journal_entry_set_compressed (prev_entry, TRUE);
+
+                        /* Create a new dummy entry and add it to the model*/
+                        GlJournalEntry *entry_header = g_object_new (GL_TYPE_JOURNAL_ENTRY, NULL);
+                        gl_journal_entry_set_message (entry_header, gl_journal_entry_get_message(prev_entry));
+                        gl_journal_entry_set_ncentries (entry_header, c_entries);
+                        gl_journal_entry_set_compress_header (entry_header, TRUE);
+
+                        //g_print("header_message: %s\n", gl_journal_entry_get_message(entry_header));
+
+                        /* handle timestamp in descending order */
+                        gl_journal_entry_set_timestamp (entry_header, header_timestamp);
+
+                        /* handle timestamp in ascending order */
+                        //gl_journal_entry_set_timestamp (entry_header, gl_journal_entry_get_timestamp(prev_entry));
+
+                        //g_print("new entry was added. c_entries: %d\n", c_entries);
+
+                        /* for Ascending Order */
+                        // g_ptr_array_add (model->entries, entry_header);
+                        // g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+
+                        /* for Descending Order (see bounding test cases here) */
+                        //last = model->entries->len;
+                        g_print("before fetch crash\n");
+                        g_print ("last:%d  c_entries: %d\n", last, c_entries);
+
+                        g_ptr_array_insert (model->entries, last - c_entries, entry_header);
+                        g_list_model_items_changed (G_LIST_MODEL (model), last - c_entries, 0, 1);
+                        //model->n_entries_to_fetch = 50 - (model->n_entries_to_fetch + c_entries - 1;
+
+                        /* reset the count of compressed entries */
+                        c_entries  = 0;
+                    }
+
+                model->n_entries_to_fetch--;
+
+                }
+
+
+
+            }
+
+            /* Add the current entry to model */
+            last = model->entries->len;
+
+
             g_ptr_array_add (model->entries, entry);
             g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+
+            g_print("end c_entries: %d\n", c_entries);
+            g_print("n_entries_to_fetch: %d\n", model->n_entries_to_fetch);
         }
     }
     else
     {
         model->fetched_all = TRUE;
         model->n_entries_to_fetch = 0;
+
+        /* Check if the last read entry was in a compressed group */
+        /* If it was in a compressed group , then add the header for it */
+        if (c_entries >= 2)
+        {
+            last = model->entries->len;
+
+             GlJournalEntry *prev_entry = g_ptr_array_index (model->entries, last-1);
+            //gl_journal_entry_set_compressed (prev_entry, TRUE);
+
+            /* Create a new dummy entry and add it to the model*/
+            GlJournalEntry *entry_header = g_object_new (GL_TYPE_JOURNAL_ENTRY, NULL);
+            gl_journal_entry_set_message (entry_header, gl_journal_entry_get_message(prev_entry));
+            gl_journal_entry_set_ncentries (entry_header, c_entries);
+            gl_journal_entry_set_compress_header (entry_header, TRUE);
+
+            //g_print("header_message: %s\n", gl_journal_entry_get_message(entry_header));
+
+            /* handle timestamp in descending order */
+            gl_journal_entry_set_timestamp (entry_header, header_timestamp);
+
+            /* handle timestamp in ascending order */
+            //gl_journal_entry_set_timestamp (entry_header, gl_journal_entry_get_timestamp(prev_entry));
+
+            //g_print("new entry was added. c_entries: %d\n", c_entries);
+
+            /* for Ascending Order */
+            // g_ptr_array_add (model->entries, entry_header);
+            // g_list_model_items_changed (G_LIST_MODEL (model), last, 0, 1);
+
+            /* for Descending Order (see bounding test cases here) */
+            //last = model->entries->len;
+            g_print("after fetch crash\n");
+            g_print ("last:%d  c_entries: %d\n", last, c_entries);
+
+            g_ptr_array_insert (model->entries, last - c_entries, entry_header);
+            g_list_model_items_changed (G_LIST_MODEL (model), last - c_entries, 0, 1);
+
+            /* reset the count of compressed entries */
+            //c_entries  = 0;
+        }
+
+
+
     }
 
     if (model->n_entries_to_fetch > 0)
     {
         return G_SOURCE_CONTINUE;
     }
+    // else if (model->fetched_all == FALSE) /* if n_entries_to_fetch reached zero very early */
+    // {
+    //     model->n_entries_to_fetch = model->n_entries_to_fetch + 50;
+    //     return G_SOURCE_CONTINUE;
+    // }
     else
     {
+        g_print("idle source");
         model->idle_source = 0;
         g_object_notify_by_pspec (G_OBJECT (model), properties[PROP_LOADING]);
         return G_SOURCE_REMOVE;
@@ -376,6 +525,7 @@ gl_journal_model_process_query (GlJournalModel *model)
     gl_journal_set_start_position (model->journal, model->query->start_timestamp);
 
     /* Start re-population of the journal */
+    c_entries = 0;
     gl_journal_model_fetch_more_entries (model, FALSE);
 
     /* Free array */
@@ -1016,4 +1166,48 @@ gl_journal_model_fetch_more_entries (GlJournalModel *model,
         model->idle_source = g_idle_add_full (G_PRIORITY_LOW, gl_journal_model_fetch_idle, model, NULL);
         g_object_notify_by_pspec (G_OBJECT (model), properties[PROP_LOADING]);
     }
+}
+
+static gboolean
+gl_journal_entry_check_message_similarity (GlJournalEntry *current_entry,
+                                           GlJournalEntry *prev_entry)
+{
+    const gchar *current_entry_message;
+    const gchar *prev_entry_message;
+    const gchar *current_entry_sender;
+    const gchar *prev_entry_sender;
+    const gchar *first_whitespace_index;
+
+    current_entry_message = gl_journal_entry_get_message (current_entry);
+    prev_entry_message = gl_journal_entry_get_message (prev_entry);
+
+    current_entry_sender = gl_journal_entry_get_command_line (current_entry);
+    prev_entry_sender = gl_journal_entry_get_command_line (prev_entry);
+
+    GString *current_entry_word = g_string_new (NULL);
+    first_whitespace_index = strchr (current_entry_message, ' ');
+    g_string_append_len (current_entry_word, current_entry_message,
+                         first_whitespace_index - current_entry_message);
+
+    GString *prev_entry_word = g_string_new (NULL);
+    first_whitespace_index = strchr (prev_entry_message, ' ');
+    g_string_append_len (prev_entry_word, prev_entry_message, first_whitespace_index - prev_entry_message);
+
+    /* We return TRUE if the adjacent messages have similar first word
+     * or if they are from the same sender
+     */
+    if (g_string_equal (current_entry_word, prev_entry_word) == TRUE)
+    {
+        return TRUE;
+    }
+    /* Check if the sender of messages are same */
+    else if (current_entry_sender && prev_entry_sender)
+    {
+        if (g_strcmp0 (current_entry_sender, prev_entry_sender) == 0)
+        {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }

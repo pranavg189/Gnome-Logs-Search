@@ -43,6 +43,12 @@ struct _GlJournalEntry
   gchar *gid;
   gchar *systemd_unit;
   gchar *executable_path;
+
+  /* Row header parameters */
+  gboolean compress; /* states whether to hide the entry in the UI or not */
+
+  gboolean compress_header; /* states whether the entry is a dummy entry or not */
+  guint n_centries; /* number of compressed entries shown in UI */
 };
 
 G_DEFINE_TYPE (GlJournalEntry, gl_journal_entry, G_TYPE_OBJECT);
@@ -522,6 +528,10 @@ _gl_journal_query_entry (GlJournal *self)
         g_clear_error (&error);
     }
 
+    entry->compress = FALSE;
+    entry->compress_header = FALSE;
+    entry->n_centries = 0;
+
     return entry;
 
 out:
@@ -815,4 +825,58 @@ gl_journal_entry_get_executable_path (GlJournalEntry *entry)
   g_return_val_if_fail (GL_IS_JOURNAL_ENTRY (entry), NULL);
 
   return entry->executable_path;
+}
+
+gboolean
+gl_journal_entry_get_compressed (GlJournalEntry *entry)
+{
+  g_return_val_if_fail (GL_IS_JOURNAL_ENTRY (entry), 0);
+
+  return entry->compress;
+}
+
+void
+gl_journal_entry_set_compressed (GlJournalEntry *entry, gboolean compress)
+{
+  entry->compress = compress;
+}
+
+gboolean
+gl_journal_entry_get_compress_header (GlJournalEntry *entry)
+{
+  g_return_val_if_fail (GL_IS_JOURNAL_ENTRY (entry), 0);
+
+  return entry->compress_header;
+}
+
+void
+gl_journal_entry_set_compress_header (GlJournalEntry *entry, gboolean compress_header)
+{
+  entry->compress_header = compress_header;
+}
+
+guint
+gl_journal_entry_get_ncentries (GlJournalEntry *entry)
+{
+  g_return_val_if_fail (GL_IS_JOURNAL_ENTRY (entry), 0);
+
+  return entry->n_centries;
+}
+
+void
+gl_journal_entry_set_ncentries (GlJournalEntry *entry, guint n_centries)
+{
+  entry->n_centries = n_centries;
+}
+
+void
+gl_journal_entry_set_message (GlJournalEntry *entry, const gchar *message)
+{
+  entry->message = g_strdup (message);
+}
+
+void
+gl_journal_entry_set_timestamp (GlJournalEntry *entry, guint64 timestamp)
+{
+    entry->timestamp = timestamp;
 }

@@ -93,6 +93,15 @@ const gchar *           gl_journal_entry_get_gid                        (GlJourn
 const gchar *           gl_journal_entry_get_systemd_unit               (GlJournalEntry *entry);
 const gchar *           gl_journal_entry_get_executable_path            (GlJournalEntry *entry);
 
+gboolean gl_journal_entry_get_compressed (GlJournalEntry *entry);
+void gl_journal_entry_set_compressed (GlJournalEntry *entry, gboolean compress);
+gboolean gl_journal_entry_get_compress_header (GlJournalEntry *entry);
+void gl_journal_entry_set_compress_header (GlJournalEntry *entry, gboolean compress_header);
+guint gl_journal_entry_get_ncentries (GlJournalEntry *entry);
+void gl_journal_entry_set_ncentries (GlJournalEntry *entry, guint n_centries);
+void gl_journal_entry_set_message (GlJournalEntry *entry, const gchar *message);
+void gl_journal_entry_set_timestamp (GlJournalEntry *entry, guint64 timestamp);
+
 G_END_DECLS
 
 #endif /* GL_JOURNAL_H_ */

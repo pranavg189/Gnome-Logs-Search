@@ -51,6 +51,7 @@ guint64 gl_event_view_row_get_timestamp (GlEventViewRow *row);
 GtkWidget * gl_event_view_row_get_category_label (GlEventViewRow *row);
 GtkWidget * gl_event_view_row_get_message_label (GlEventViewRow *row);
 GtkWidget * gl_event_view_row_get_time_label (GlEventViewRow *row);
+GtkWidget * gl_event_view_row_get_compressed_entries_label (GlEventViewRow *row);
 
 G_END_DECLS
 

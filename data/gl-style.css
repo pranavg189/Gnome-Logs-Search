@@ -8,12 +8,7 @@
     padding-right: 30px;
 }
 
-.detail-comm {
-    font-weight: bold;
-    padding: 10px;
-}
-
-.detail-audit_session, .detail-kernel_device, .detail-message, .detail-priority, .detail-time, .detail-subject, .detail-definedby, .detail-support, .detail-documentation, .detail-message {
+.detail-comm, .detail-audit_session, .detail-kernel_device, .detail-message, .detail-priority, .detail-time, .detail-subject, .detail-definedby, .detail-support, .detail-documentation, .detail-message {
     padding: 10px;
 }
 
@@ -23,6 +18,18 @@
 
 .event {
     padding: 5px;
+}
+
+.compressed-entries-label {
+    background-color: #d4d4d4;
+    font-size: small;
+    border-radius: 3px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.compressed-row {
+    background-color: #f9f9f9;
 }
 
 .event-time {

@@ -130,7 +130,7 @@ gl_event_view_list_get_output_logs (GlEventViewList *view)
 }
 
 
-
+// This also may be a prospective function for compressing logs from the frontend side
 static void
 listbox_update_header_func (GtkListBoxRow *row,
                             GtkListBoxRow *before,
@@ -145,8 +145,10 @@ listbox_update_header_func (GtkListBoxRow *row,
     }
 
     current = gtk_list_box_row_get_header (row);
+    GlJournalEntry *entry = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW(row));
 
-    if (current == NULL)
+
+    if (current == NULL && gl_journal_entry_get_compressed (entry) == FALSE)
     {
         current = gtk_separator_new (GTK_ORIENTATION_HORIZONTAL);
         gtk_widget_show (current);
@@ -167,26 +169,90 @@ on_listbox_row_activated (GtkListBox *listbox,
     priv = gl_event_view_list_get_instance_private (view);
     priv->entry = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (row));
 
-    toplevel = gtk_widget_get_toplevel (GTK_WIDGET (view));
+    // toplevel = gtk_widget_get_toplevel (GTK_WIDGET (view));
 
-    if (gtk_widget_is_toplevel (toplevel))
+    // if (gtk_widget_is_toplevel (toplevel))
+    // {
+    //     GAction *mode;
+    //     GEnumClass *eclass;
+    //     GEnumValue *evalue;
+
+    //     mode = g_action_map_lookup_action (G_ACTION_MAP (toplevel), "view-mode");
+    //     eclass = g_type_class_ref (GL_TYPE_EVENT_VIEW_MODE);
+    //     evalue = g_enum_get_value (eclass, GL_EVENT_VIEW_MODE_DETAIL);
+
+    //     g_action_activate (mode, g_variant_new_string (evalue->value_nick));
+
+    //     g_type_class_unref (eclass);
+    // }
+    // else
+    // {
+    //     g_debug ("Widget not in toplevel window, not switching toolbar mode");
+    // }
+
+    /* Hide/show compressed rows if clicked on compress header row */
+    if (gl_journal_entry_get_compress_header (priv->entry) == TRUE)
     {
-        GAction *mode;
-        GEnumClass *eclass;
-        GEnumValue *evalue;
+        guint compressed_entries = gl_journal_entry_get_ncentries (priv->entry);
 
-        mode = g_action_map_lookup_action (G_ACTION_MAP (toplevel), "view-mode");
-        eclass = g_type_class_ref (GL_TYPE_EVENT_VIEW_MODE);
-        evalue = g_enum_get_value (eclass, GL_EVENT_VIEW_MODE_DETAIL);
+        gint header_row_index = gtk_list_box_row_get_index (row);
+        GtkStyleContext *context;
+        gint index;
 
-        g_action_activate (mode, g_variant_new_string (evalue->value_nick));
+        for (index = header_row_index + 1; compressed_entries != 0; index++)
+        {
+            GtkListBoxRow *compressed_row = gtk_list_box_get_row_at_index (GTK_LIST_BOX (priv->entries_box),
+                                                                           index);
 
-        g_type_class_unref (eclass);
+            context = gtk_widget_get_style_context (GTK_WIDGET (compressed_row));
+            gtk_style_context_add_class (context, "compressed-row");
+
+            //GlJournalEntry *entry = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (compressed_row));
+
+             //g_print ("row compressed: %d\n", gl_journal_entry_get_compressed (entry));
+            // g_print ("compressed: %d\n", )
+
+            /* Toggle the visibility */
+            if(gtk_widget_get_visible (GTK_WIDGET (compressed_row)) == TRUE)
+            {
+                gtk_widget_hide (GTK_WIDGET(compressed_row));
+            }
+            else
+            {
+                gtk_widget_show (GTK_WIDGET(compressed_row));
+            }
+
+            compressed_entries--;
+        }
     }
-    else
+    else /* Display the detailed popover */
     {
-        g_debug ("Widget not in toplevel window, not switching toolbar mode");
+        GtkWidget *event_detail_popover;
+        event_detail_popover = gl_event_view_detail_new (priv->entry);
+        gtk_popover_set_relative_to (GTK_POPOVER (event_detail_popover), GTK_WIDGET (row));
+        gtk_widget_show (event_detail_popover);
     }
+
+
+    //g_print("new row was added\n");
+}
+
+static void
+on_listbox_row_added (GtkContainer *container,
+                      GtkWidget    *widget,
+                      gpointer      user_data)
+{
+    g_print("new row was added\n");
+}
+
+static void
+on_model_changed (GListModel *list,
+               guint       position,
+               guint       removed,
+               guint       added,
+               gpointer    user_data)
+{
+    g_print("model-changed\n");
 }
 
 GlJournalEntry *
@@ -303,6 +369,10 @@ gl_event_view_create_empty (G_GNUC_UNUSED GlEventViewList *view)
     return box;
 }
 
+// Function used to create a GtkListBoxRow for each GlJournalEntry
+// would have to modfiy this function to see if I can get it to display compressed row.
+// here variable "item" represents the GlJournalEntry object
+// you can hide/show the rows using gtk_widget_show()/hide()
 static GtkWidget *
 gl_event_list_view_create_row_widget (gpointer item,
                                       gpointer user_data)
@@ -341,8 +411,14 @@ gl_event_list_view_create_row_widget (gpointer item,
     message_label = gl_event_view_row_get_message_label (GL_EVENT_VIEW_ROW (rtn));
     time_label = gl_event_view_row_get_time_label (GL_EVENT_VIEW_ROW (rtn));
 
-    gtk_size_group_add_widget (GTK_SIZE_GROUP (priv->message_sizegroup),
-                               message_label);
+    GtkWidget *compressed_entries_label;
+    compressed_entries_label = gl_event_view_row_get_compressed_entries_label (GL_EVENT_VIEW_ROW (rtn));
+
+    // gtk_size_group_add_widget (GTK_SIZE_GROUP (priv->message_sizegroup),
+    //                            message_label);
+    // gtk_size_group_add_widget (GTK_SIZE_GROUP (priv->message_sizegroup),
+    //                            compressed_entries_label);
+
     gtk_size_group_add_widget (GTK_SIZE_GROUP (priv->time_sizegroup),
                                time_label);
 
@@ -659,7 +735,15 @@ on_notify_category (GlCategoryList *list,
     settings = g_settings_new (SETTINGS_SCHEMA);
     sort_order = g_settings_get_enum (settings, SORT_ORDER);
     g_object_unref (settings);
-    gl_event_view_list_set_sort_order (view, sort_order);
+    //gl_event_view_list_set_sort_order (view, sort_order);
+}
+
+static void
+on_model_load_finish (GlJournalModel *model,
+                    GParamSpec *pspec,
+                    gpointer user_data)
+{
+   g_print("model_loading_finished\n");
 }
 
 void
@@ -964,6 +1048,15 @@ gl_event_view_list_init (GlEventViewList *view)
 
     priv->journal_model = gl_journal_model_new ();
     g_application_bind_busy_property (g_application_get_default (), priv->journal_model, "loading");
+
+    // g_signal_connect (GTK_CONTAINER (priv->entries_box), "add",
+    //                   G_CALLBACK (on_listbox_row_added), GTK_BOX (view));
+
+    // g_signal_connect (priv->journal_model, "items-changed",
+    //                   G_CALLBACK (on_model_changed), view);
+
+    // g_signal_connect (priv->journal_model, "notify::loading",
+    //                   G_CALLBACK (on_model_load_finish), view);
 
     g_signal_connect (priv->event_scrolled, "edge-reached",
                       G_CALLBACK (gl_event_list_view_edge_reached), view);

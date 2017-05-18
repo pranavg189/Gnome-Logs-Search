@@ -52,6 +52,7 @@
                     <object class="GtkScrolledWindow" id="event_scrolled">
                         <property name="visible">True</property>
                         <property name="expand">True</property>
+                        <!-- <property name="hscrollbar-policy">always</property> -->
                         <child>
                             <object class="GtkListBox" id="entries_box">
                                 <property name="visible">True</property>

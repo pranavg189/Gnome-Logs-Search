@@ -46,6 +46,7 @@ typedef struct
     GlJournalEntry *entry;
     GtkWidget *category_label;
     GtkWidget *message_label;
+    GtkWidget *compressed_entries_label;
     GtkWidget *time_label;
 } GlEventViewRowPrivate;
 
@@ -111,6 +112,16 @@ gl_event_view_row_get_time_label (GlEventViewRow *row)
     priv = gl_event_view_row_get_instance_private (row);
 
     return priv->time_label;
+}
+
+GtkWidget *
+gl_event_view_row_get_compressed_entries_label (GlEventViewRow *row)
+{
+    GlEventViewRowPrivate *priv;
+
+    priv = gl_event_view_row_get_instance_private (row);
+
+    return priv->compressed_entries_label;
 }
 
 static void
@@ -294,6 +305,8 @@ gl_event_view_row_constructed (GObject *object)
 
     message = gl_journal_entry_get_message (entry);
 
+    // g_print ("crash_message: %s\n", message);
+
     newline_index = strchr (message, '\n');
 
     if (newline_index)
@@ -319,8 +332,33 @@ gl_event_view_row_constructed (GObject *object)
                              PANGO_ELLIPSIZE_END);
     gtk_label_set_xalign (GTK_LABEL (priv->message_label), 0);
     gtk_label_set_single_line_mode (GTK_LABEL (priv->message_label), TRUE);
-    gtk_grid_attach (GTK_GRID (grid), priv->message_label,
-                     1, 0, 1, 1);
+
+
+    if (gl_journal_entry_get_compress_header (entry) == TRUE)
+    {
+        GtkWidget *message_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 10);
+        //gtk_container_add (GTK_CONTAINER (message_box), priv->message_label);
+        gtk_box_pack_start (GTK_BOX(message_box), priv->message_label, TRUE, TRUE, 2);
+
+        guint c_entries = gl_journal_entry_get_ncentries (entry);
+        priv->compressed_entries_label = gtk_label_new (g_strdup_printf("%d", c_entries));
+        gtk_widget_set_direction (priv->compressed_entries_label, GTK_TEXT_DIR_LTR);
+        context = gtk_widget_get_style_context (GTK_WIDGET (priv->compressed_entries_label));
+        gtk_style_context_add_class (context, "compressed-entries-label");
+        gtk_widget_set_halign (priv->compressed_entries_label, GTK_ALIGN_START);
+        gtk_label_set_xalign (GTK_LABEL (priv->compressed_entries_label), 0);
+
+        //gtk_container_add (GTK_CONTAINER (message_box), compressed_entries_label);
+        gtk_box_pack_start (GTK_BOX(message_box), priv->compressed_entries_label, TRUE, TRUE, 0);
+
+        gtk_grid_attach (GTK_GRID (grid), message_box,
+                         1, 0, 1, 1);
+    }
+    else
+    {
+        gtk_grid_attach (GTK_GRID (grid), priv->message_label,
+                         1, 0, 1, 1);
+    }
 
     now = g_date_time_new_now_local ();
     time = gl_util_timestamp_to_display (gl_journal_entry_get_timestamp (entry),
@@ -343,6 +381,7 @@ gl_event_view_row_constructed (GObject *object)
                                  gl_journal_entry_get_message (entry));
 
     gtk_widget_show_all (GTK_WIDGET (row));
+    // gtk_widget_hide(GTK_WIDGET(row));
 
     G_OBJECT_CLASS (gl_event_view_row_parent_class)->constructed (object);
 }
@@ -384,11 +423,38 @@ gl_event_view_row_class_init (GlEventViewRowClass *klass)
                                        obj_properties);
 }
 
+/* Hide the rows to be compressed */
+static void
+on_parent_set (GtkWidget *widget,
+               GtkWidget *old_parent,
+               gpointer   user_data)
+{
+    GlEventViewRow *row = GL_EVENT_VIEW_ROW (user_data);
+    GlEventViewRowPrivate *priv;
+
+    priv = gl_event_view_row_get_instance_private (row);
+
+
+    //g_print("%s\n", gl_journal_entry_get_message(priv->entry));
+    //g_print ("row compressed parent set: %d\n", gl_journal_entry_get_compressed (priv->entry));
+
+    /* Execute only if the parent was not set earlier at all */
+    if (old_parent == NULL && gl_journal_entry_get_compressed (priv->entry) == TRUE)
+    {
+
+
+        gtk_widget_hide (widget);
+    }
+}
+
 static void
 gl_event_view_row_init (GlEventViewRow *row)
 {
     /* The widgets are initialized in gl_event_view_row_constructed (), because
      * at _init() time the construct-only properties have not been set. */
+
+    g_signal_connect (row, "parent-set",
+                      G_CALLBACK (on_parent_set), row);
 }
 
 GlJournalEntry *
