@@ -21,6 +21,8 @@
 
 #include <gio/gio.h>
 
+#include <gl-journal-model.h>
+
 #define GL_TYPE_SEARCH_PROVIDER gl_search_provider_get_type ()
 G_DECLARE_FINAL_TYPE (GlSearchProvider, gl_search_provider, GL, SEARCH_PROVIDER, GObject)
 
@@ -31,5 +33,8 @@ gboolean                  gl_search_provider_register                       (GlS
                                                                              GError **error);
 
 void                      gl_search_provider_unregister                     (GlSearchProvider *self);
+
+void                      gl_search_provider_setup                          (GlSearchProvider *self,
+                                                                             GlJournalModel *model);
 
 #endif

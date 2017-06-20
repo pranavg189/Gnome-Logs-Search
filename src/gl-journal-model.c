@@ -111,7 +111,10 @@ gl_journal_model_init (GlJournalModel *model)
     model->journal = gl_journal_new ();
     model->entries = g_ptr_array_new_with_free_func (g_object_unref);
 
-    gl_journal_model_fetch_more_entries (model, FALSE);
+    // This line causes conflict as query is undefined while initializing the journal model
+    // The journal model should only start fetching the results when a query is passed to it
+    // through the GlEventViewList or GlShellSearchProvider.
+    //gl_journal_model_fetch_more_entries (model, FALSE);
 }
 
 static void
@@ -131,12 +134,6 @@ gl_journal_model_get_property (GObject    *object,
     default:
         g_assert_not_reached ();
     }
-}
-
-GPtrArray *
-gl_journal_model_get_hits (GlJournalModel *model)
-{
-    return model->entries;
 }
 
 static void

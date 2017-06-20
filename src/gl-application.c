@@ -28,6 +28,7 @@
 #include "gl-util.h"
 #include "gl-window.h"
 #include "gl-search-provider.h"
+#include "gl-journal-model.h"
 
 struct _GlApplication
 {
@@ -41,6 +42,7 @@ typedef struct
     GSettings *settings;
     gchar *monospace_font;
     GlSearchProvider *search_provider;
+    GlJournalModel *model;
 } GlApplicationPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GlApplication, gl_application, GTK_TYPE_APPLICATION)
@@ -229,6 +231,16 @@ gl_application_startup (GApplication *application)
     /* gtk_init() calls setlocale(), so gettext must be called after that. */
     g_set_application_name (_(PACKAGE_NAME));
     gtk_window_set_default_icon_name (PACKAGE_TARNAME);
+
+    GlApplicationPrivate *priv;
+
+    priv = gl_application_get_instance_private (GL_APPLICATION (application));
+    //priv->model = GL_JOURNAL_MODEL(gl_journal_model_new ());
+
+    // if(GL_IS_JOURNAL_MODEL (priv->model))
+    //     g_print("model is fine.\n");
+    // g_application_bind_busy_property (g_application_get_default (), priv->model, "loading");
+    // gl_search_provider_setup (priv->search_provider, GL_JOURNAL_MODEL(priv->model));
 
     /* Must register custom types before using them from GtkBuilder. */
     gl_window_get_type ();
