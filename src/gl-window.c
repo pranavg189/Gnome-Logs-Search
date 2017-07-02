@@ -378,10 +378,10 @@ gl_window_search (GlWindow *window,
 
     priv = gl_window_get_instance_private (window);
 
-    action_search = g_action_map_lookup_action (G_ACTION_MAP (window),
-                                                "search");
-    /* Switch to search mode */
-    g_action_change_state (action_search, g_variant_new_boolean (TRUE));
+    // action_search = g_action_map_lookup_action (G_ACTION_MAP (window),
+    //                                             "search");
+    // /* Switch to search mode */
+    // g_action_change_state (action_search, g_variant_new_boolean (TRUE));
 
     gl_event_view_search (GL_EVENT_VIEW (priv->event), text);
 }

@@ -816,3 +816,11 @@ gl_journal_entry_get_executable_path (GlJournalEntry *entry)
 
   return entry->executable_path;
 }
+
+const gchar *
+gl_journal_entry_get_cursor (GlJournalEntry *entry)
+{
+  g_return_val_if_fail (GL_IS_JOURNAL_ENTRY (entry), NULL);
+
+  return entry->cursor;
+}

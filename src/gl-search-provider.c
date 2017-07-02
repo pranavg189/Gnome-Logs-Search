@@ -24,13 +24,15 @@
 #include "gl-search-provider-generated.h"
 #include "gl-search-provider.h"
 
+#define MAX_NUMBER_OF_RESULTS 5
+
 typedef struct
 {
     LogsShellSearchProvider2 *skeleton;
     GlJournalModel *model;
     GDBusMethodInvocation *invocation;
 
-    GPtrArray *hits; /* remember to clear the hits array everytime a new search is started */
+    GHashTable *metas_cache; /* remember to clear the HashTable everytime a new search is started */
 
 } GlSearchProviderPrivate;
 
@@ -50,67 +52,51 @@ struct _GlSearchProviderClass
 G_DEFINE_TYPE_WITH_PRIVATE (GlSearchProvider, gl_search_provider, G_TYPE_OBJECT);
 
 static void
-search_finished (GlJournalModel *model,
-                 GParamSpec *pspec,
-                 gpointer user_data)
+results_added (GListModel *list,
+               guint       position,
+               guint       removed,
+               guint       added,
+               gpointer    user_data)
 {
     GlSearchProvider *search_provider = user_data;
     GlSearchProviderPrivate *priv;
-
     priv = gl_search_provider_get_instance_private (search_provider);
 
-    if(priv->invocation == NULL)
+    /* check if model has fetched the minimum required results to display in search provider */
+    if ((g_list_model_get_n_items (list) == MAX_NUMBER_OF_RESULTS))
     {
-        g_print("invocation is null\n");
-        //g_application_release (g_application_get_default ());
-        return;
-    }
+        GVariantBuilder builder;
+        guint i;
 
-    // If model has started loading the entries
-    if(gl_journal_model_get_loading (priv->model))
-    {
-        g_print("model is currently loading\n");
-        //g_application_release (g_application_get_default ());
-        return;
-    }
-    // if model has finished loading the entries
-    else
-    {
-        g_return_if_fail (GL_IS_JOURNAL_MODEL (priv->model));
-        g_print("model has finished loading entries\n");
-        g_print("hits len: %d\n", g_list_model_get_n_items (G_LIST_MODEL (priv->model)));
+        g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
 
-        /* check if model has fetched at least some results */
-        if ((g_list_model_get_n_items (G_LIST_MODEL (priv->model))) > 0)
+        i = 0;
+        while (g_list_model_get_item (list, i))
         {
-            GVariantBuilder builder;
-            gint i;
+            GlJournalEntry *entry;
+            const gchar *entry_cursor;
 
-            g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
+            entry = g_list_model_get_item (list, i);
 
-            i = 0;
-            while (g_list_model_get_item (G_LIST_MODEL (priv->model), i))
-            {
-                GlJournalEntry *entry;
-                entry = g_list_model_get_item (G_LIST_MODEL (priv->model), i);
+            entry_cursor = gl_journal_entry_get_cursor (entry);
 
-                g_ptr_array_add (priv->hits, entry);
+            g_hash_table_replace (priv->metas_cache, g_strdup (entry_cursor), g_object_ref (entry));
 
-                g_variant_builder_add (&builder, "s", gl_journal_entry_get_message (entry));
+            g_variant_builder_add (&builder, "s", entry_cursor);
 
-                i++;
-            }
-
-            g_print("priv->hits->len: %d\n", priv->hits->len);
-
-            g_dbus_method_invocation_return_value (priv->invocation, g_variant_new ("(as)", &builder));
+            i++;
         }
+
+        g_print("model has fetched 3 entries\n");
+
+        g_dbus_method_invocation_return_value (priv->invocation, g_variant_new ("(as)", &builder));
 
         g_clear_object (&priv->invocation);
 
         g_application_release (g_application_get_default ());
     }
 }
+
 
 static void
 execute_search (GlSearchProvider *search_provider,
@@ -131,14 +117,9 @@ execute_search (GlSearchProvider *search_provider,
     }
 
     /* Clear the results of previous searches */
-    if (priv->hits->len > 0)
-    {
-        g_ptr_array_free (priv->hits, TRUE);
+    g_hash_table_remove_all (priv->metas_cache);
 
-        priv->hits = g_ptr_array_new_with_free_func (g_object_unref);
-    }
-
-    /* join terms seperated by space */
+    /* join terms separated by space */
     search_text = g_strjoinv (" ", terms);
 
     /* Create the query to be given to journal model */
@@ -146,6 +127,7 @@ execute_search (GlSearchProvider *search_provider,
 
     /* Add all available journal fields */
     /* Does it make sense to search the terms by all the fields ? */
+    /* Also, shoud entire journal be searched or just the current boot ? */
     gl_query_add_match (query, "_PID", search_text, GL_QUERY_SEARCH_TYPE_SUBSTRING);
     gl_query_add_match (query, "_UID", search_text, GL_QUERY_SEARCH_TYPE_SUBSTRING);
     gl_query_add_match (query, "_GID", search_text, GL_QUERY_SEARCH_TYPE_SUBSTRING);
@@ -202,90 +184,70 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
                          gpointer user_data)
 {
     GlSearchProvider *search_provider = user_data;
-    const gchar *message;
-    const gchar *process_name;
-    GHashTable *metas_cache;
-    GVariantBuilder meta;
-    GVariant *meta_variant;
-    GVariantBuilder builder;
-    GVariant *meta_data;
     GIcon *result_icon;
+    GVariantBuilder builder;
     gint idx;
 
     GlSearchProviderPrivate *priv;
 
     priv = gl_search_provider_get_instance_private (search_provider);
 
-    metas_cache = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                         g_free, (GDestroyNotify) g_variant_unref);
-
     /* Load the icon */
     result_icon = g_themed_icon_new_with_default_fallbacks ("text-x-generic");
 
-    g_print ("hits len result metas: %d\n", priv->hits->len);
+    /* Build the array of result's metadata */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
 
-    if (priv->hits->len > 0)
+    /* Get the shell search provider metadata for each journal entry returned by GetInitialResultSet */
+    for (idx = 0; results[idx] != NULL; idx++)
     {
+        GlJournalEntry *entry;
+        const gchar *message;
+        const gchar *process_name;
+        gchar *entry_cursor;
+        GVariantBuilder meta;
+        GVariant *meta_data;
 
-        for (idx = 0; idx < priv->hits->len; idx++)
+        /* Get the journal entry cursor returned by GetInitialResultSet */
+        entry_cursor = results[idx];
+
+        /* Get the journal entry corresponding to the unique journal entry cursor */
+        entry = g_hash_table_lookup (priv->metas_cache, entry_cursor);
+
+        /* Get the metadata for every journal entry */
+        g_variant_builder_init (&meta, G_VARIANT_TYPE ("a{sv}"));
+
+        message = gl_journal_entry_get_message (entry);
+        process_name = gl_journal_entry_get_command_line (entry);
+
+        g_variant_builder_add (&meta, "{sv}",
+                               "id", g_variant_new_string (entry_cursor));
+
+        g_variant_builder_add (&meta, "{sv}",
+                               "name", g_variant_new_string (message));
+
+        if(process_name == NULL)
         {
-            GlJournalEntry *entry;
-            gchar *id;
-
-            entry = g_ptr_array_index (priv->hits, idx);
-
-            g_variant_builder_init (&meta, G_VARIANT_TYPE ("a{sv}"));
-
-            id = g_strdup_printf ("%d", idx);
-
-            message = gl_journal_entry_get_message (entry);
-            process_name = gl_journal_entry_get_command_line (entry);
-
-
             g_variant_builder_add (&meta, "{sv}",
-                                   "id", g_variant_new_string (id));
-
+                               "description", g_variant_new_string ("null")); // change this to " " afterwards
+        }
+        else
+        {
             g_variant_builder_add (&meta, "{sv}",
-                                   "name", g_variant_new_string (message));
-
-            if(process_name == NULL)
-            {
-                g_variant_builder_add (&meta, "{sv}",
-                                   "description", g_variant_new_string ("null")); // change this to " " afterwards
-            }
-            else
-            {
-                g_variant_builder_add (&meta, "{sv}",
-                                       "description", g_variant_new_string (process_name));
-            }
-
-            g_variant_builder_add (&meta, "{sv}",
-                                   "icon", g_icon_serialize (result_icon));
-
-            meta_variant = g_variant_builder_end (&meta);
-
-            g_hash_table_insert (metas_cache,
-                                 g_strdup (message), g_variant_ref_sink (meta_variant));
-
-            g_free (id);
+                                   "description", g_variant_new_string (process_name));
         }
 
-        /* Look up the meta data in the hash table */
-        g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
+        g_variant_builder_add (&meta, "{sv}",
+                               "icon", g_icon_serialize (result_icon));
 
-        for (idx = 0; results[idx] != NULL; idx++)
-        {
-            meta_data = g_hash_table_lookup (metas_cache, results[idx]);
+        meta_data = g_variant_builder_end (&meta);
 
-            g_variant_builder_add_value (&builder, meta_data);
-        }
-
-        g_dbus_method_invocation_return_value (invocation,
-                                               g_variant_new ("(aa{sv})", &builder));
+        g_variant_builder_add_value (&builder, meta_data);
 
     }
 
-    g_hash_table_destroy (metas_cache);
+    g_dbus_method_invocation_return_value (invocation,
+                                           g_variant_new ("(aa{sv})", &builder));
 
 
     return TRUE;
@@ -309,7 +271,7 @@ handle_activate_result (LogsShellSearchProvider2 *skeleton,
 
     app = g_application_get_default ();
 
-    entry = g_ptr_array_index (priv->hits, atoi (result));
+    entry = g_hash_table_lookup (priv->metas_cache, result);
 
     gl_application_open_detail_entry (app, entry);
 
@@ -318,28 +280,28 @@ handle_activate_result (LogsShellSearchProvider2 *skeleton,
     return TRUE;
 }
 
-// static gboolean
-// handle_launch_search (LogsShellSearchProvider2 *skeleton,
-//                       GDBusMethodInvocation *invocation,
-//                       gchar **terms,
-//                       guint32 timestamp,
-//                       gpointer user_data)
-// {
-//   GApplication *app;
-//   gchar *string;
+static gboolean
+handle_launch_search (LogsShellSearchProvider2 *skeleton,
+                      GDBusMethodInvocation *invocation,
+                      gchar **terms,
+                      guint32 timestamp,
+                      gpointer user_data)
+{
+  GApplication *app;
+  gchar *string;
 
-//   string = g_strjoinv (" ", terms);
+  string = g_strjoinv (" ", terms);
 
-//   app = g_application_get_default ();
+  app = g_application_get_default ();
 
-//   gl_application_search (app, string);
+  gl_application_search (app, string);
 
-//   g_free (string);
+  g_free (string);
 
-//   logs_shell_search_provider2_complete_launch_search (skeleton, invocation);
+  logs_shell_search_provider2_complete_launch_search (skeleton, invocation);
 
-//   return TRUE;
-// }
+  return TRUE;
+}
 
 static void
 search_provider_dispose (GObject *obj)
@@ -372,10 +334,7 @@ gl_search_provider_init (GlSearchProvider *self)
 
     priv->model = gl_journal_model_new ();
 
-    priv->hits = g_ptr_array_new_with_free_func (g_object_unref);
-
-    /* We can't use it here because GlApplication class has not been initialized yet */
-    //g_application_bind_busy_property (g_application_get_default (), priv->model, "loading");
+    priv->metas_cache = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
 
     priv->skeleton = logs_shell_search_provider2_skeleton_new ();
 
@@ -395,13 +354,13 @@ gl_search_provider_init (GlSearchProvider *self)
                       "handle-activate-result",
                       G_CALLBACK (handle_activate_result),
                       self);
-    // g_signal_connect_swapped (self->skeleton,
-    //                           "handle-launch-search",
-    //                           G_CALLBACK (handle_launch_search),
-    //                           self);
+    g_signal_connect (priv->skeleton,
+                      "handle-launch-search",
+                      G_CALLBACK (handle_launch_search),
+                      self);
 
-    g_signal_connect (priv->model, "notify::loading",
-                      G_CALLBACK (search_finished), self);
+    g_signal_connect (priv->model, "items-changed",
+                      G_CALLBACK (results_added), self);
 }
 
 gboolean

@@ -57,9 +57,15 @@ gl_application_search (GApplication *self,
                        const gchar *text)
 {
     GtkWidget *window;
+    GAction *action_search;
 
     window = gl_window_new (GTK_APPLICATION (self));
     gtk_widget_show (window);
+
+    action_search = g_action_map_lookup_action (G_ACTION_MAP (window),
+                                                "search");
+    /* Switch to search mode */
+    g_action_change_state (action_search, g_variant_new_boolean (TRUE));
 
     gl_window_search (GL_WINDOW (window), text);
 }
@@ -232,9 +238,9 @@ gl_application_startup (GApplication *application)
     g_set_application_name (_(PACKAGE_NAME));
     gtk_window_set_default_icon_name (PACKAGE_TARNAME);
 
-    GlApplicationPrivate *priv;
+    // GlApplicationPrivate *priv;
 
-    priv = gl_application_get_instance_private (GL_APPLICATION (application));
+    // priv = gl_application_get_instance_private (GL_APPLICATION (application));
     //priv->model = GL_JOURNAL_MODEL(gl_journal_model_new ());
 
     // if(GL_IS_JOURNAL_MODEL (priv->model))

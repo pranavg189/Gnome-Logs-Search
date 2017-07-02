@@ -92,6 +92,7 @@ const gchar *           gl_journal_entry_get_pid                        (GlJourn
 const gchar *           gl_journal_entry_get_gid                        (GlJournalEntry *entry);
 const gchar *           gl_journal_entry_get_systemd_unit               (GlJournalEntry *entry);
 const gchar *           gl_journal_entry_get_executable_path            (GlJournalEntry *entry);
+const gchar *           gl_journal_entry_get_cursor                     (GlJournalEntry *entry);
 
 G_END_DECLS
 
