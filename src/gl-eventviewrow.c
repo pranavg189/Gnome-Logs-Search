@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "gl-enums.h"
+#include "gl-util.h"
 
 enum
 {
@@ -225,32 +226,6 @@ gl_event_view_row_construct_category_label (GlEventViewRow *row,
     }
 }
 
-static gchar *
-gl_event_view_row_replace_newline (const gchar *message)
-{
-    GString *newmessage;
-    const gchar *newline_index;
-    const gchar *prevpos;
-
-    newmessage = g_string_sized_new (strlen (message));
-    prevpos = message;
-
-    newline_index = strchr (message, '\n');
-
-    while (newline_index != NULL)
-    {
-        g_string_append_len (newmessage, prevpos, newline_index - prevpos);
-        g_string_append_unichar (newmessage, 0x2424);
-
-        prevpos = newline_index + 1;
-        newline_index = strchr (prevpos, '\n');
-    }
-
-    g_string_append (newmessage, prevpos);
-
-    return g_string_free (newmessage, FALSE);
-}
-
 static void
 gl_event_view_row_constructed (GObject *object)
 {
@@ -307,7 +282,7 @@ gl_event_view_row_constructed (GObject *object)
     {
         gchar *message_label;
 
-        message_label = gl_event_view_row_replace_newline (message);
+        message_label = gl_util_message_replace_newline (message);
 
         priv->message_label = gtk_label_new (message_label);
 

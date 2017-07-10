@@ -26,6 +26,7 @@
 #include "gl-eventviewlist.h"
 #include "gl-util.h"
 #include "gl-window.h"
+#include "gl-shell-search-provider.h"
 
 struct _GlApplication
 {
@@ -38,6 +39,7 @@ typedef struct
     GSettings *desktop;
     GSettings *settings;
     gchar *monospace_font;
+    GlShellSearchProvider *shell_search_provider;
 } GlApplicationPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (GlApplication, gl_application, GTK_TYPE_APPLICATION)
@@ -257,6 +259,54 @@ gl_application_handle_local_options (GApplication *application,
     return -1;
 }
 
+static gboolean
+gl_application_dbus_register (GApplication *application,
+                              GDBusConnection *connection,
+                              const gchar *object_path,
+                              GError **error)
+{
+    GlApplicationPrivate *priv;
+
+    priv = gl_application_get_instance_private (GL_APPLICATION (application));
+
+    if (!G_APPLICATION_CLASS (gl_application_parent_class)->dbus_register (application,
+                                                                           connection,
+                                                                           object_path,
+                                                                           error))
+    {
+        return FALSE;
+    }
+
+    priv->shell_search_provider = gl_shell_search_provider_new ();
+
+    if (!gl_shell_search_provider_register (priv->shell_search_provider, connection, error))
+    {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static void
+gl_application_dbus_unregister (GApplication *application,
+                                GDBusConnection *connection,
+                                const gchar *object_path)
+{
+    GlApplication *self = GL_APPLICATION (application);
+    GlApplicationPrivate *priv;
+
+    priv = gl_application_get_instance_private (self);
+
+    G_APPLICATION_CLASS (gl_application_parent_class)->dbus_unregister (application,
+                                                                        connection,
+                                                                        object_path);
+
+    if (priv->shell_search_provider)
+    {
+        gl_shell_search_provider_unregister (priv->shell_search_provider);
+    }
+}
+
 static void
 gl_application_finalize (GObject *object)
 {
@@ -315,6 +365,8 @@ gl_application_class_init (GlApplicationClass *klass)
     app_class->activate = gl_application_activate;
     app_class->startup = gl_application_startup;
     app_class->handle_local_options = gl_application_handle_local_options;
+    app_class->dbus_register = gl_application_dbus_register;
+    app_class->dbus_unregister = gl_application_dbus_unregister;
 }
 
 GtkApplication *

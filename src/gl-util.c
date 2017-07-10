@@ -584,3 +584,29 @@ pango_font_description_to_css (PangoFontDescription *desc)
 
   return g_string_free (s, FALSE);
 }
+
+gchar *
+gl_util_message_replace_newline (const gchar *message)
+{
+    GString *newmessage;
+    const gchar *newline_index;
+    const gchar *prevpos;
+
+    newmessage = g_string_sized_new (strlen (message));
+    prevpos = message;
+
+    newline_index = strchr (message, '\n');
+
+    while (newline_index != NULL)
+    {
+        g_string_append_len (newmessage, prevpos, newline_index - prevpos);
+        g_string_append_unichar (newmessage, 0x2424);
+
+        prevpos = newline_index + 1;
+        newline_index = strchr (prevpos, '\n');
+    }
+
+    g_string_append (newmessage, prevpos);
+
+    return g_string_free (newmessage, FALSE);
+}

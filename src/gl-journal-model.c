@@ -221,7 +221,7 @@ gl_journal_model_get_property (GObject    *object,
     }
 }
 
-static void
+void
 gl_journal_model_stop_idle (GlJournalModel *model)
 {
     if (model->idle_source)
@@ -1095,6 +1095,15 @@ gl_journal_model_get_loading (GlJournalModel *model)
 
     return model->idle_source > 0;
 }
+
+gboolean
+gl_journal_model_fetched_all (GlJournalModel *model)
+{
+    g_return_val_if_fail (GL_IS_JOURNAL_MODEL (model), FALSE);
+
+    return model->fetched_all;
+}
+
 
 /**
  * gl_journal_model_fetch_more_entries:

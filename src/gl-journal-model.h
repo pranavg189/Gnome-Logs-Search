@@ -96,4 +96,8 @@ GlRowEntryType          gl_row_entry_get_row_type                       (GlRowEn
 
 guint                   gl_row_entry_get_compressed_entries             (GlRowEntry *entry);
 
+void                    gl_journal_model_stop_idle                      (GlJournalModel *model);
+
+gboolean                gl_journal_model_fetched_all                    (GlJournalModel *model);
+
 #endif
