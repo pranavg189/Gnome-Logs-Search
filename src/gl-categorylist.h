@@ -70,6 +70,7 @@ typedef enum
 GType gl_category_list_get_type (void);
 GtkWidget * gl_category_list_new (void);
 GlCategoryListFilter gl_category_list_get_category (GlCategoryList *list);
+void gl_category_list_select_category_filter_all (GlCategoryList *list);
 
 G_END_DECLS
 

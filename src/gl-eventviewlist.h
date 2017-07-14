@@ -42,6 +42,7 @@ GArray * gl_event_view_list_get_boot_ids (GlEventViewList *view);
 gchar * gl_event_view_list_get_output_logs (GlEventViewList *view);
 gchar * gl_event_view_list_get_boot_time (GlEventViewList *view,
                                           const gchar *boot_match);
+void gl_event_view_list_search (GlEventViewList *view, const gchar *text);
 
 G_END_DECLS
 

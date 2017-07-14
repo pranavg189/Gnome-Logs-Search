@@ -49,6 +49,28 @@ static const gchar SETTINGS_SCHEMA[] = "org.gnome.Logs";
 static const gchar DESKTOP_MONOSPACE_FONT_NAME[] = "monospace-font-name";
 static const gchar SORT_ORDER[] = "sort-order";
 
+void
+gl_application_search (GlApplication *self,
+                       const gchar *text,
+                       guint32 timestamp)
+{
+    GtkWidget *window;
+
+    /* Get active window if there is one */
+    window = GTK_WIDGET (gtk_application_get_active_window (GTK_APPLICATION (self)));
+
+    /* If active window was not present, create a new one */
+    if (window == NULL)
+    {
+        window = gl_window_new (GTK_APPLICATION (self));
+        gtk_widget_show (window);
+    }
+
+    gl_window_search (GL_WINDOW (window), text);
+
+    gtk_window_present_with_time (GTK_WINDOW (window), timestamp);
+}
+
 static void
 on_new_window (GSimpleAction *action,
                GVariant *parameter,

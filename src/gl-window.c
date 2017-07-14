@@ -281,6 +281,23 @@ on_ignore_button_clicked (GlWindow *window,
 }
 
 void
+gl_window_search (GlWindow *window,
+                  const gchar *text)
+{
+    GlWindowPrivate *priv;
+    GAction *action_search;
+
+    priv = gl_window_get_instance_private (window);
+
+    action_search = g_action_map_lookup_action (G_ACTION_MAP (window),
+                                                "search");
+    /* Switch to search mode */
+    g_action_change_state (action_search, g_variant_new_boolean (TRUE));
+
+    gl_event_view_list_search (GL_EVENT_VIEW_LIST (priv->event_list), text);
+}
+
+void
 gl_window_set_sort_order (GlWindow *window,
                           GlSortOrder sort_order)
 {

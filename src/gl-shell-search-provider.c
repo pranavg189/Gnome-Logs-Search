@@ -328,6 +328,29 @@ handle_get_result_metas (LogsShellSearchProvider2  *skeleton,
     return TRUE;
 }
 
+static gboolean
+handle_launch_search (LogsShellSearchProvider2 *skeleton,
+                      GDBusMethodInvocation *invocation,
+                      gchar **terms,
+                      guint32 timestamp,
+                      gpointer user_data)
+{
+  GApplication *app;
+  gchar *string;
+
+  string = g_strjoinv (" ", terms);
+
+  app = g_application_get_default ();
+
+  gl_application_search (GL_APPLICATION (app), string, timestamp);
+
+  g_free (string);
+
+  logs_shell_search_provider2_complete_launch_search (skeleton, invocation);
+
+  return TRUE;
+}
+
 static void
 gl_shell_search_provider_dispose (GObject *obj)
 {
@@ -374,6 +397,10 @@ gl_shell_search_provider_init (GlShellSearchProvider *self)
     g_signal_connect (priv->skeleton,
                       "handle-get-result-metas",
                       G_CALLBACK (handle_get_result_metas),
+                      self);
+    g_signal_connect (priv->skeleton,
+                      "handle-launch-search",
+                      G_CALLBACK (handle_launch_search),
                       self);
 
     g_signal_connect (priv->model, "items-changed",

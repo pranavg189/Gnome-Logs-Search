@@ -34,6 +34,7 @@ typedef enum
 G_DECLARE_FINAL_TYPE (GlApplication, gl_application, GL, APPLICATION, GtkApplication)
 
 GtkApplication * gl_application_new (void);
+void gl_application_search (GlApplication *self, const gchar *text, guint32 timestamp);
 
 G_END_DECLS
 

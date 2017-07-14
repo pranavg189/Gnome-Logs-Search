@@ -918,6 +918,23 @@ gl_event_list_view_edge_reached (GtkScrolledWindow *scrolled,
         gl_journal_model_fetch_more_entries (priv->journal_model, FALSE);
 }
 
+void
+gl_event_view_list_search (GlEventViewList *view,
+                           const gchar *text)
+{
+    GlEventViewListPrivate *priv;
+
+    g_return_if_fail (GL_EVENT_VIEW_LIST (view));
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+    /* Set text on search entry */
+    gtk_entry_set_text (GTK_ENTRY (priv->search_entry), text);
+
+    /* Select "All" category filter */
+    gl_category_list_select_category_filter_all (GL_CATEGORY_LIST (priv->categories));
+}
+
 static void
 search_popover_journal_search_field_changed (GlSearchPopover *popover,
                                              GParamSpec *psec,
