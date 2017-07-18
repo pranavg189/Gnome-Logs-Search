@@ -71,6 +71,21 @@ gl_application_search (GlApplication *self,
     gtk_window_present_with_time (GTK_WINDOW (window), timestamp);
 }
 
+void
+gl_application_open_detail_entry (GlApplication *self,
+                                  GlJournalEntry *journal_entry,
+                                  guint32 timestamp)
+{
+    GtkWidget *window;
+
+    window = gl_window_new (GTK_APPLICATION (self));
+    gtk_widget_show (window);
+
+    gl_window_open_detail_entry (GL_WINDOW (window), journal_entry);
+
+    gtk_window_present_with_time (GTK_WINDOW (window), timestamp);
+}
+
 static void
 on_new_window (GSimpleAction *action,
                GVariant *parameter,

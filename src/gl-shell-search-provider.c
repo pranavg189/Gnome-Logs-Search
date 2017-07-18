@@ -351,6 +351,33 @@ handle_launch_search (LogsShellSearchProvider2 *skeleton,
   return TRUE;
 }
 
+static gboolean
+handle_activate_result (LogsShellSearchProvider2 *skeleton,
+                        GDBusMethodInvocation *invocation,
+                        gchar *result,
+                        gchar **terms,
+                        guint32 timestamp,
+                        gpointer user_data)
+{
+    GlShellSearchProvider *search_provider = user_data;
+    GApplication *app;
+    GlJournalEntry *entry;
+
+    GlShellSearchProviderPrivate *priv;
+
+    priv = gl_shell_search_provider_get_instance_private (search_provider);
+
+    entry = g_hash_table_lookup (priv->metas_cache, result);
+
+    app = g_application_get_default ();
+
+    gl_application_open_detail_entry (GL_APPLICATION (app), entry, timestamp);
+
+    logs_shell_search_provider2_complete_activate_result (skeleton, invocation);
+
+    return TRUE;
+}
+
 static void
 gl_shell_search_provider_dispose (GObject *obj)
 {
@@ -401,6 +428,10 @@ gl_shell_search_provider_init (GlShellSearchProvider *self)
     g_signal_connect (priv->skeleton,
                       "handle-launch-search",
                       G_CALLBACK (handle_launch_search),
+                      self);
+    g_signal_connect (priv->skeleton,
+                      "handle-activate-result",
+                      G_CALLBACK (handle_activate_result),
                       self);
 
     g_signal_connect (priv->model, "items-changed",

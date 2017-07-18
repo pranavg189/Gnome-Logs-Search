@@ -935,6 +935,35 @@ gl_event_view_list_search (GlEventViewList *view,
     gl_category_list_select_category_filter_all (GL_CATEGORY_LIST (priv->categories));
 }
 
+/* Function to show the detailed popover for an entry when user activates it
+   in the search provider results */
+void
+gl_event_view_list_show_entry_detail (GlEventViewList *view,
+                                      GlJournalEntry *journal_entry)
+{
+    GlEventViewListPrivate *priv;
+    GtkListBoxRow *detailed_row;
+    GtkWidget *event_detail_popover;
+
+    priv = gl_event_view_list_get_instance_private (view);
+
+     /* Select "All" category filter */
+    gl_category_list_select_category_filter_all (GL_CATEGORY_LIST (priv->categories));
+
+    gl_journal_model_add_detail_entry (priv->journal_model, journal_entry);
+
+    detailed_row = gtk_list_box_get_row_at_index (GTK_LIST_BOX (priv->entries_box),
+                                                  0);
+
+    priv->entry = gl_event_view_row_get_entry (GL_EVENT_VIEW_ROW (detailed_row));
+
+    event_detail_popover = gl_event_view_detail_new (priv->entry, priv->clock_format);
+    gtk_popover_set_relative_to (GTK_POPOVER (event_detail_popover), GTK_WIDGET (detailed_row));
+
+    gtk_widget_hide (priv->categories);
+    gtk_widget_show (event_detail_popover);
+}
+
 static void
 search_popover_journal_search_field_changed (GlSearchPopover *popover,
                                              GParamSpec *psec,

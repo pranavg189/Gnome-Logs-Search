@@ -100,4 +100,7 @@ void                    gl_journal_model_stop_idle                      (GlJourn
 
 gboolean                gl_journal_model_fetched_all                    (GlJournalModel *model);
 
+void                    gl_journal_model_add_detail_entry               (GlJournalModel *model,
+                                                                         GlJournalEntry *journal_entry);
+
 #endif

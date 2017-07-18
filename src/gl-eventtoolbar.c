@@ -55,6 +55,18 @@ gl_event_toolbar_change_current_boot (GlEventToolbar *toolbar,
 }
 
 void
+gl_event_toolbar_hide_widgets (GlEventToolbar *toolbar)
+{
+    GlEventToolbarPrivate *priv;
+
+    priv = gl_event_toolbar_get_instance_private (toolbar);
+
+    gtk_widget_hide (priv->output_button);
+    gtk_widget_hide (priv->menu_button);
+    gtk_widget_hide (priv->search_button);
+}
+
+void
 gl_event_toolbar_add_boots (GlEventToolbar *toolbar,
                            GArray *boot_ids)
 {

@@ -298,6 +298,22 @@ gl_window_search (GlWindow *window,
 }
 
 void
+gl_window_open_detail_entry (GlWindow *window,
+                             GlJournalEntry *journal_entry)
+{
+    GlWindowPrivate *priv;
+    GlEventViewList *event_list;
+
+    priv = gl_window_get_instance_private (window);
+    event_list = GL_EVENT_VIEW_LIST (priv->event_list);
+
+    gl_event_toolbar_hide_widgets (GL_EVENT_TOOLBAR (priv->event_toolbar));
+
+    /* Set the entry selected from the search provider results */
+    gl_event_view_list_show_entry_detail (event_list, journal_entry);
+}
+
+void
 gl_window_set_sort_order (GlWindow *window,
                           GlSortOrder sort_order)
 {

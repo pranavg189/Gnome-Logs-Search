@@ -552,6 +552,35 @@ gl_journal_model_take_query (GlJournalModel *model,
 
 }
 
+void
+gl_journal_model_add_detail_entry (GlJournalModel *model,
+                                   GlJournalEntry *detailed_journal_entry)
+{
+    GlRowEntry *detailed_row_entry;
+
+    g_return_if_fail (GL_JOURNAL_MODEL (model));
+
+    gl_journal_model_stop_idle (model);
+    model->fetched_all = FALSE;
+
+    if (model->entries->len > 0)
+    {
+        g_list_model_items_changed (G_LIST_MODEL (model), 0, model->entries->len, 0);
+
+        g_ptr_array_free (model->entries, TRUE);
+
+        model->entries = g_ptr_array_new_with_free_func (g_object_unref);
+    }
+
+    /* Add only the detailed entry passed from search provider to the model */
+    detailed_row_entry = gl_row_entry_new();
+    detailed_row_entry->journal_entry = detailed_journal_entry;
+
+    g_ptr_array_add (model->entries, detailed_row_entry);
+
+    g_list_model_items_changed (G_LIST_MODEL (model), 0, 0, 1);
+}
+
 /* Add a new queryitem to query */
 void
 gl_query_add_match (GlQuery *query,

@@ -43,6 +43,8 @@ gchar * gl_event_view_list_get_output_logs (GlEventViewList *view);
 gchar * gl_event_view_list_get_boot_time (GlEventViewList *view,
                                           const gchar *boot_match);
 void gl_event_view_list_search (GlEventViewList *view, const gchar *text);
+void gl_event_view_list_show_entry_detail (GlEventViewList *view,
+                                           GlJournalEntry *journal_entry);
 
 G_END_DECLS
 

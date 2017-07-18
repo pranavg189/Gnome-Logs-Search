@@ -43,6 +43,7 @@ GtkWidget * gl_event_toolbar_new (void);
 void gl_event_toolbar_add_boots (GlEventToolbar *toolbar, GArray *boot_ids);
 void gl_event_toolbar_change_current_boot (GlEventToolbar *toolbar,
                                            const gchar *current_boot);
+void gl_event_toolbar_hide_widgets (GlEventToolbar *toolbar);
 
 G_END_DECLS
 
