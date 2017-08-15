@@ -17,6 +17,7 @@
  */
 
 #include "gl-util.h"
+#include "gl-mock-journal.h"
 
 static void
 util_timestamp_to_display (void)
@@ -62,12 +63,22 @@ util_timestamp_to_display (void)
     g_date_time_unref (now);
 }
 
+static void
+check_log_message (void)
+{
+   GlMockJournal *journal = gl_mock_journal_new();
+   GlMockJournalEntry *entry = gl_mock_journal_previous(journal);
+   const gchar *mystring = gl_mock_journal_entry_get_message(entry);
+   g_assert_cmpstr(mystring, ==, "This is a test");
+}
+
 int
 main (int argc, char** argv)
 {
     g_test_init (&argc, &argv, NULL);
 
     g_test_add_func ("/util/timestamp_to_display", util_timestamp_to_display);
+    g_test_add_func ("/util/check_log_message", check_log_message);
 
     return g_test_run ();
 }

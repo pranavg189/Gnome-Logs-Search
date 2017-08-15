@@ -144,7 +144,11 @@ tests_test_gl_util_LDADD = \
 
 tests_test_gl_util_SOURCES = \
 	tests/test-gl-util.c \
+	tests/gl-mock-journal.c \
 	src/gl-util.c
+
+tests_test_gl_util_headers = \
+	tests/gl-mock-journal.h
 
 check_PROGRAMS = \
 	tests/test-gl-util
