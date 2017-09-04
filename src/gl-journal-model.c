@@ -63,8 +63,6 @@ static void gl_journal_model_interface_init (GListModelInterface *iface);
 static GPtrArray *tokenize_search_string (gchar *search_text);
 static gboolean search_in_entry (GlJournalEntry *entry, GlJournalModel *model);
 static gboolean gl_query_check_journal_end (GlQuery *query, GlJournalEntry *entry);
-static gboolean gl_row_entry_check_message_similarity (GlRowEntry *current_row_entry,
-                                                       GlRowEntry *prev_row_entry);
 static void gl_journal_model_add_header (GlJournalModel *model);
 
 
@@ -1132,6 +1130,16 @@ gl_row_entry_new (void)
     return g_object_new (GL_TYPE_ROW_ENTRY, NULL);
 }
 
+GlRowEntry *
+gl_row_entry_test_new (GlJournalEntry *journal_entry)
+{
+    GlRowEntry *entry = g_object_new (GL_TYPE_ROW_ENTRY, NULL);
+    entry->journal_entry = journal_entry;
+
+    return entry;
+}
+
+
 GlJournalEntry *
 gl_row_entry_get_journal_entry (GlRowEntry *entry)
 {
@@ -1189,7 +1197,7 @@ gl_row_entry_class_init (GlRowEntryClass *class)
  * have same first word or if they have been sent by the same
  * sending process.
  */
-static gboolean
+gboolean
 gl_row_entry_check_message_similarity (GlRowEntry *current_row_entry,
                                        GlRowEntry *prev_row_entry)
 {

@@ -816,3 +816,14 @@ gl_journal_entry_get_executable_path (GlJournalEntry *entry)
 
   return entry->executable_path;
 }
+
+GlJournalEntry *
+gl_journal_entry_new (const gchar *message, const gchar *commandline)
+{
+    GlJournalEntry *entry = g_object_new (GL_TYPE_JOURNAL_ENTRY, NULL);
+
+    entry->message = g_strdup(message);
+    entry->comm = g_strdup(commandline);
+
+    return entry;
+}

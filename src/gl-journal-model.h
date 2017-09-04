@@ -96,4 +96,9 @@ GlRowEntryType          gl_row_entry_get_row_type                       (GlRowEn
 
 guint                   gl_row_entry_get_compressed_entries             (GlRowEntry *entry);
 
+gboolean                gl_row_entry_check_message_similarity           (GlRowEntry *current_row_entry,
+                                                                        GlRowEntry *prev_row_entry);
+
+GlRowEntry *            gl_row_entry_test_new                           (GlJournalEntry *journal_entry);
+
 #endif

@@ -18,6 +18,8 @@
 
 #include "gl-util.h"
 #include "gl-mock-journal.h"
+#include "gl-journal-model.h"
+#include "gl-journal.h"
 
 static void
 util_timestamp_to_display (void)
@@ -72,13 +74,82 @@ check_log_message (void)
    g_assert_cmpstr(mystring, ==, "This is a test");
 }
 
+static void
+model_check_message_similarity (void)
+{
+    GlJournalEntry *entry;
+    GlJournalEntry *prev_entry;
+    GlRowEntry *current_row_entry;
+    GlRowEntry *prev_row_entry;
+    gboolean result;
+
+    /* Test for similar message */
+    entry = gl_journal_entry_new ("Test message", "systemd");
+    prev_entry = gl_journal_entry_new ("Test message", "systemd");
+
+    current_row_entry = gl_row_entry_test_new (entry);
+    prev_row_entry = gl_row_entry_test_new (prev_entry);
+
+    result = gl_row_entry_check_message_similarity (current_row_entry, prev_row_entry);
+
+    g_assert_true(result);
+
+    /* Test for similar first word */
+    entry = gl_journal_entry_new ("First word", "systemd");
+    prev_entry = gl_journal_entry_new ("First message", "dbus");
+
+    current_row_entry = gl_row_entry_test_new (entry);
+    prev_row_entry = gl_row_entry_test_new (prev_entry);
+
+    result = gl_row_entry_check_message_similarity (current_row_entry, prev_row_entry);
+
+    g_assert_true (result);
+
+    /* Test for similar senders */
+    entry = gl_journal_entry_new ("ABC", "systemd");
+    prev_entry = gl_journal_entry_new ("XYZ", "systemd");
+
+    current_row_entry = gl_row_entry_test_new (entry);
+    prev_row_entry = gl_row_entry_test_new (prev_entry);
+
+    result = gl_row_entry_check_message_similarity (current_row_entry, prev_row_entry);
+
+    g_assert_true (result);
+
+    /* Test for dissmilar message and sender */
+    entry = gl_journal_entry_new ("ABC", "systemd");
+    prev_entry = gl_journal_entry_new ("XYZ", "dbus");
+
+    current_row_entry = gl_row_entry_test_new (entry);
+    prev_row_entry = gl_row_entry_test_new (prev_entry);
+
+    result = gl_row_entry_check_message_similarity (current_row_entry, prev_row_entry);
+
+    g_assert_false (result);
+
+    /* Test for similar message and null senders */
+    entry = gl_journal_entry_new ("ABC", NULL);
+    prev_entry = gl_journal_entry_new ("ABC", NULL);
+
+    current_row_entry = gl_row_entry_test_new (entry);
+    prev_row_entry = gl_row_entry_test_new (prev_entry);
+
+    result = gl_row_entry_check_message_similarity (current_row_entry, prev_row_entry);
+
+    g_assert_true (result);
+}
+
 int
 main (int argc, char** argv)
 {
+    gtk_init(&argc, &argv);
+
     g_test_init (&argc, &argv, NULL);
 
     g_test_add_func ("/util/timestamp_to_display", util_timestamp_to_display);
     g_test_add_func ("/util/check_log_message", check_log_message);
+
+    g_test_add_func ("/model/check_message_similarity", model_check_message_similarity);
 
     return g_test_run ();
 }
